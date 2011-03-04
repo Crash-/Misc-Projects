@@ -1,0 +1,7 @@
+name: Inventory Protection
+version: 1.0
+main: us.Crash.InvProt.Main
+commands:
+  invprot:
+    description:
+    usage:
