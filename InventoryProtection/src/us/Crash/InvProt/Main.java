@@ -10,7 +10,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityListener;
-import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerEvent;
 import org.bukkit.event.player.PlayerListener;
 import org.bukkit.event.player.PlayerRespawnEvent;
@@ -45,9 +44,16 @@ public class Main extends JavaPlugin implements Runnable {
 		getServer().getPluginManager().registerEvent(Event.Type.PLAYER_QUIT, playerListener, Event.Priority.Normal, this);
 		getServer().getPluginManager().registerEvent(Event.Type.ENTITY_DEATH, entityListener, Event.Priority.Normal, this);
 		
+		if(getServer().getPluginManager().getPlugin("Permissions") != null){
+			
+			System.out.println("[InvProt] Hooked onto Permissions plugin.");
+			Main.permission = (Permissions)getServer().getPluginManager().getPlugin("Permissions");
+			
+		}
+		
 		getServer().getScheduler().scheduleSyncRepeatingTask(this, this, 0, 100);
 		
-		System.out.println("[InvProt] Inventory Protection v0.1 enabled.");
+		System.out.println("[InvProt] Inventory Protection v0.2 enabled.");
 		
 	}
 	
@@ -79,7 +85,7 @@ public class Main extends JavaPlugin implements Runnable {
 				
 			} else {
 				
-				if(permission.getHandler().has(p, "invprot.protection")){
+				if(permission.getHandler().permission(p, "invprot.protection")){
 					
 					if(!userList.contains(p.getName())){
 						
@@ -110,6 +116,7 @@ public class Main extends JavaPlugin implements Runnable {
 		
 	}
 	
+	@SuppressWarnings("deprecation")
 	@Override
 	public void run(){
 		
@@ -149,6 +156,7 @@ class SListener extends ServerListener {
 		
 		if(event.getPlugin().getDescription().equals("Permissions")){
 			
+			System.out.println("[InvProt] Hooked onto Permissions plugin.");
 			Main.permission = (Permissions)event.getPlugin();
 			
 		}
