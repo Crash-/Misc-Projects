@@ -149,22 +149,6 @@ public class Main extends JavaPlugin implements Runnable {
 
 }
 
-class SListener extends ServerListener {
-	
-	@Override
-	public void onPluginEnabled(PluginEvent event){
-		
-		if(event.getPlugin().getDescription().equals("Permissions")){
-			
-			System.out.println("[InvProt] Hooked onto Permissions plugin.");
-			Main.permission = (Permissions)event.getPlugin();
-			
-		}
-		
-	}
-	
-}
-
 class PListener extends PlayerListener {
 
 	@Override
