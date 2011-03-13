@@ -1,0 +1,7 @@
+name: Slots
+version: 0.1
+main: us.Crash.Slots.Slots
+commands:
+  slots:
+    description:
+    usage:
