@@ -1,0 +1,10 @@
+name: ItemGiver
+version: 0.1
+main: us.Crash.ItemGiver.Main
+commands:
+  d:
+    description:
+    usage:
+  a:
+    description:
+    usage:
