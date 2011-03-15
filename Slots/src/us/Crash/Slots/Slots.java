@@ -25,13 +25,13 @@ public class Slots extends JavaPlugin {
 	public static ArrayList<SlotMachine> slotsList = new ArrayList<SlotMachine>();
 	public static ArrayList<String> createSlot = new ArrayList<String>();
 	public static ArrayList<String> removeSlot = new ArrayList<String>();
+	public static ArrayList<SlotData> rollInfo = new ArrayList<SlotData>();
 	private static ArrayList<String> noDebugList = new ArrayList<String>();
-	public static int[] payoutList = new int[5];
 	public boolean isOPOnly = true;
 	public int tickDelay = 50;
 	public static Permissions Permissions = null;
 	public static GroupManager GroupManager = null;
-	private File configFile, saveFile;
+	private File configFile, saveFile, rollsFile;
 
 	public static boolean hasPermission(Player p, String command){
 
@@ -82,7 +82,7 @@ public class Slots extends JavaPlugin {
 	@Override
 	public void onDisable() {
 
-		saveData(payoutList);
+		saveData();
 		System.out.println("[Slots] Slots v" + getDescription().getVersion() + " disabled.");
 
 	}
@@ -91,6 +91,7 @@ public class Slots extends JavaPlugin {
 	public void onEnable() {
 
 		BListener blockListener = new BListener(this);
+		rollsFile = new File("plugins/Slots/rolls.txt");
 		configFile = new File("plugins/Slots/config.yml");
 		saveFile = new File("plugins/Slots/slots.txt");
 		if(new File("plugins/Slots/").mkdir())
@@ -98,12 +99,12 @@ public class Slots extends JavaPlugin {
 
 		if(!configFile.exists()){
 
-			try {
-				configFile.createNewFile();
-			} catch (IOException e) {
+			try { configFile.createNewFile(); } catch (IOException e) {
+				
 				System.out.println("[Slots]Error creating config file.");
 				getServer().getPluginManager().disablePlugin(this);
 				return;
+				
 			}
 			BufferedWriter out = null;
 			try {
@@ -112,7 +113,7 @@ public class Slots extends JavaPlugin {
 
 				out.write("tick-delay: 50\r\nop-only: true\r\n\r\npayout:\r\n    jackpot: 10000\r\n    red7: 3000\r\n    cherry: 1000\r\n    heart: 500\r\n    bar: 100\r\n");
 
-				System.out.println("[Slots] Created/wrote default values to config file.");
+				System.out.println("[Slots] Created/wrote default config.");
 
 			} catch(Exception e){
 
@@ -130,7 +131,7 @@ public class Slots extends JavaPlugin {
 
 		if(!saveFile.exists()){
 
-			try { saveFile.createNewFile(); }catch(Exception e){
+			try { saveFile.createNewFile(); } catch(Exception e){
 
 				System.out.println("[Slots] Error creating save file.");
 				getServer().getPluginManager().disablePlugin(this);
@@ -139,6 +140,44 @@ public class Slots extends JavaPlugin {
 			}
 			System.out.println("[Slots] Created new save file.");
 
+		}
+		
+		if(!rollsFile.exists()){
+			
+			try { rollsFile.createNewFile(); } catch(Exception e){
+				
+				System.out.println("[Slots] Error creating the rolls file.");
+				getServer().getPluginManager().disablePlugin(this);
+				return;
+				
+			}
+			
+			BufferedWriter out = null;
+			try {
+				
+				out = new BufferedWriter(new FileWriter(rollsFile));
+				
+				out.write("name=Jackpot\r\nsymbol=J\r\npay=10000\r\nchance=1/8\r\ncolor=13\r\n\r\n" +
+						  "name=Red 7\r\nsymbol=7\r\npay=3000\r\nchance=1/8\r\ncolor=12\r\n\r\n" +
+						  "name=Cherry\r\nsymbol=C\r\npay=1000\r\nchance=1/6\r\ncolor=4\r\n\r\n" +
+						  "name=Heart\r\nsymbol=H\r\npay=500\r\nchance=1/4\r\ncolor=11\r\n\r\n" +
+						  "name=Bar\r\nsymbol=B\r\npay=100\r\nchance=1/3\r\ncolor=10\r\n\r\n");
+				
+				System.out.println("[Slots] Created/Wrote default rolls.");
+				
+			} catch(Exception e){
+				
+				System.out.println("[Slots] Error when writing to the rolls file.");
+				getServer().getPluginManager().disablePlugin(this);
+				return;
+				
+			} finally {
+				
+				try { out.close(); } catch (IOException e) { }
+				
+			}
+			
+			
 		}
 
 		Permissions = (Permissions)getServer().getPluginManager().getPlugin("Permissions");
@@ -189,9 +228,9 @@ public class Slots extends JavaPlugin {
 			return false;
 
 		Player p = (Player)sender;
-
+		
 		if(command.getName().equalsIgnoreCase("slots")){
-
+			
 			if(args.length == 0){
 
 				p.sendMessage(ChatColor.RED + "You must put in an argument.");
@@ -204,6 +243,12 @@ public class Slots extends JavaPlugin {
 				p.sendMessage(ChatColor.RED + "You can't use this command!");
 				return false;
 
+			}
+			
+			if(args[0].equalsIgnoreCase("try")){
+				
+				p.sendMessage(ChatColor.getByCode(Integer.parseInt(args[1])) + "YES!");
+				
 			}
 
 			if(args[0].equalsIgnoreCase("create")){
@@ -242,7 +287,7 @@ public class Slots extends JavaPlugin {
 
 			} else if(args[0].equals("save")){
 
-				saveData(payoutList);
+				saveData();
 				p.sendMessage(ChatColor.GREEN + "Saved files successfully.");
 				return true;
 
@@ -272,9 +317,9 @@ public class Slots extends JavaPlugin {
 						
 					}
 					
-					if(ind < 0 || ind > 4){
+					if(ind < 0 || ind > rollInfo.size()){
 						
-						p.sendMessage(ChatColor.RED + "The index must be 0 through 4.");
+						p.sendMessage(ChatColor.RED + "The index must be 0 through " + rollInfo.size() + ".");
 						return false;
 						
 					}
@@ -290,7 +335,7 @@ public class Slots extends JavaPlugin {
 						
 					}
 					
-					payoutList[ind] = newpay;
+					rollInfo.get(ind).setPay(newpay);
 					
 					p.sendMessage(ChatColor.GREEN + "Successfully set the new pay.");
 					
@@ -343,12 +388,7 @@ public class Slots extends JavaPlugin {
 
 		Configuration config = new Configuration(configFile);
 		config.load();
-
-		payoutList[0] = config.getInt("payout.jackpot", 10000);
-		payoutList[1] = config.getInt("payout.red7", 3000);
-		payoutList[2] = config.getInt("payout.cherry", 1000);
-		payoutList[3] = config.getInt("payout.heart", 500);
-		payoutList[4] = config.getInt("payout.bar", 100);
+		
 		isOPOnly = config.getBoolean("op-only", true);
 		tickDelay = config.getInt("tick-delay", 50);
 
@@ -405,7 +445,8 @@ public class Slots extends JavaPlugin {
 				}
 
 			}
-
+			
+			s.close();
 
 		} catch(Exception e){
 
@@ -413,19 +454,70 @@ public class Slots extends JavaPlugin {
 			return false;
 
 		}
+		
+		try {
+			
+			s = new Scanner(rollsFile);
+			
+			String name = "", symb, line;
+			int pay, chance1, chance2;
+			boolean hadError = false;
+			
+			while(s.hasNextLine()){
+				
+				line = s.nextLine();
+				
+				if(line == null || line.isEmpty())
+					continue;
+				
+				if(hadError){
+					
+					if(line.split("=")[0].equals("name"))
+						hadError = false;
+					else
+						continue;
+					
+				}
+				
+				try {
+
+					name = line.split("=")[1];
+					line = s.nextLine();
+					symb = line.split("=")[1];
+					line = s.nextLine();
+					pay = Integer.parseInt(line.split("=")[1]);
+					line = s.nextLine().split("=")[1];
+					chance1 = Integer.parseInt(line.split("/")[0]);
+					chance2 = Integer.parseInt(line.split("/")[1]);
+					line = s.nextLine().split("=")[1];
+					rollInfo.add(new SlotData(name, symb, ChatColor.getByCode(Integer.parseInt(line)), pay, chance1, chance2));
+					
+				} catch(Exception e){
+					
+					System.out.println("[Slots] Error with roll " + name + ".");
+					
+				}
+				
+			}
+			
+		} catch(Exception e){
+			
+			System.out.println("[Slots] Error when opening rolls file.");
+			
+		}
 
 		return true;
 
 	}
 
-	public void saveData(int[] values){
+	public void saveData(){
 
 		BufferedWriter out = null;
 		try {
 
-			out = new BufferedWriter(new FileWriter(new File("plugins/Slots/config.yml")));
+			out = new BufferedWriter(new FileWriter(configFile));
 
-			out.write("tick-delay: " + tickDelay + "\r\nop-only: " + isOPOnly + "\r\npayout:\r\n    jackpot: " + values[0] + "\r\n    red7: " + values[1] + "\r\n    cherry: " + values[2] + "\r\n    heart: " + values[3] + "\r\n    bar: " + values[4] + "\r\n");
+			out.write("tick-delay: " + tickDelay + "\r\nop-only: " + isOPOnly + "\r\n");
 
 		}catch(Exception e){
 
@@ -440,7 +532,7 @@ public class Slots extends JavaPlugin {
 
 		try {
 
-			out = new BufferedWriter(new FileWriter(new File("plugins/Slots/slots.txt")));
+			out = new BufferedWriter(new FileWriter(saveFile));
 
 			for(SlotMachine m : slotsList){
 
@@ -461,6 +553,33 @@ public class Slots extends JavaPlugin {
 
 			try { out.close(); } catch (IOException e) { }
 
+		}
+		
+		try {
+			
+			out = new BufferedWriter(new FileWriter(rollsFile));
+			
+			for(SlotData d : rollInfo){
+				
+				StringBuilder builder = new StringBuilder();
+				builder.append("name=").append(d.getName()).append("\r\n").
+						append("symbol=").append(d.getSymbol()).append("\r\n").
+						append("pay=").append(d.getPay()).append("\r\n").
+						append("chance=").append(d.getNumerator()).append("/").append(d.getDenominator()).append("\r\n").
+						append("color=").append(d.getChatColor().getCode()).append("\r\n\r\n");
+				out.write(builder.toString());
+				
+			}
+			
+		} catch(Exception e){
+			
+			System.out.println("[Slots]Error writing rolls file.");
+			return;
+			
+		} finally {
+			
+			try { out.close(); } catch (IOException e) { }
+			
 		}
 
 	}

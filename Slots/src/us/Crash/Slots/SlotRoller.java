@@ -27,7 +27,7 @@ public class SlotRoller implements Runnable {
 			myMachine.isRolling = false;
 			if(roll[0] == roll[1] && roll[1] == roll[2]){
 				
-				double winningAmount = myMachine.getCost() * Slots.payoutList[roll[0]];
+				double winningAmount = myMachine.getCost() * Slots.rollInfo.get(roll[0]).getPay();
 				roller.sendMessage(ChatColor.GOLD + "Congratulations you won " + iConomy.getBank().format(winningAmount) + "!");
 				Account account = iConomy.getBank().getAccount(roller.getName());
 				if(account == null){
@@ -50,6 +50,7 @@ public class SlotRoller implements Runnable {
 			return;
 			
 		}
+		
 		if(numRolled > 5){//Should never happen.
 			
 			myMachine.getPlugin().getServer().getScheduler().cancelTask(taskId);
@@ -59,48 +60,66 @@ public class SlotRoller implements Runnable {
 			
 		String line = myMachine.getSign().getLine(2);
 		double rand = Math.random();
-		if(rand <= (1/3.0))
-			roll[numRolled] = 4;
-		else if(rand > (1/3.0) && rand <= (1/3.0 + 1/4.0))
-			roll[numRolled] = 3;
-		else if(rand > (1/3.0 + 1/4.0) && rand <= (1/3.0 + 1/4.0 + 1/6.0))
-			roll[numRolled] = 2;
-		else if(rand > (1/3.0 + 1/4.0+ 1/6.0) && rand <= (1/3.0 + 1/4.0 + 1/6.0 + 1/8.0))
-			roll[numRolled] = 1;
-		else if(rand > (1/3.0 + 1/4.0 + 1/6.0 + 1/8.0))
-			roll[numRolled] =  0;
+		double current = 0, lastVal = 0;
+		int index = 0;
 		
-		String character = " ";
+		SlotData rolled = null;
 		
-		if(roll[numRolled] == 0)//Jackpot
-			character = "J";
-		if(roll[numRolled] == 1)//7
-			character = "7";
-		if(roll[numRolled] == 2)//Cherry
-			character = "C";
-		if(roll[numRolled] == 3)//Heart
-			character = "H";
-		if(roll[numRolled] == 4)//Bar
-			character = "B";
+		for(SlotData d : Slots.rollInfo){
 		
-		Slots.outputMessage(roller, addColor(ChatColor.GOLD + "You rolled a " + character + ChatColor.GOLD + "."));
+			current += d.getChance();
+			
+			if(rand >= lastVal && rand < current){
+				
+				rolled = d;
+				
+				break;
+				
+			}
+			
+			index++;
+			
+		}
 		
-		line = addColor(ChatColor.stripColor(line).substring(0, 4 * numRolled) + character + ChatColor.stripColor(line).substring(4 * numRolled + 1));
-		
-		myMachine.getSign().setLine(2, line);
-		myMachine.getSign().update();
+		if(rolled == null)
+			roller.sendMessage(ChatColor.RED + "There was no roll to match the random value.");
+		else {
+			Slots.outputMessage(roller, addChatColor(ChatColor.GOLD + "You rolled a " + rolled.getName() + "."));
+			line = addSignColor(ChatColor.stripColor(line).substring(0, 4 * numRolled) + rolled.getSymbol() + ChatColor.stripColor(line).substring(4 * numRolled + 1));
+			myMachine.getSign().setLine(2, line);
+			myMachine.getSign().update();
+			roll[numRolled] = index;
+			
+		}
 		
 		numRolled++;
 		
 	}
-	
-	public String addColor(String line){
 		
-		return line.replace("J", ChatColor.LIGHT_PURPLE + "J" + ChatColor.BLACK).
-					replace("7", ChatColor.RED + "7" + ChatColor.BLACK).
-					replace("C", ChatColor.DARK_RED + "C" + ChatColor.BLACK).
-					replace("H", ChatColor.AQUA + "H" + ChatColor.BLACK).
-					replace("B", ChatColor.GREEN + "B" + ChatColor.BLACK);
+	public String addChatColor(String line){
+		
+		for(SlotData d : Slots.rollInfo){
+		
+			StringBuilder b = new StringBuilder();
+			line = line.replace(d.getName(), b.append(d.getColor()).append(d.getName()).append(ChatColor.GOLD).toString());
+			
+		}
+		
+		return line;
+		
+	}
+	
+	public String addSignColor(String line){
+		
+		for(SlotData d : Slots.rollInfo){
+		
+			StringBuilder b = new StringBuilder();
+			line = line.replace(d.getSymbol(), b.append(d.getColor()).append(d.getSymbol()).append(ChatColor.BLACK).toString());
+			
+		}
+		
+		return line;
+		
 	}
 	
 	public void removeTask(){
