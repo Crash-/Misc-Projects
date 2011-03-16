@@ -33,6 +33,8 @@ public class Slots extends JavaPlugin {
 	public static GroupManager GroupManager = null;
 	private File configFile, saveFile, rollsFile;
 
+	public static void t(String s){ System.out.println(s); }
+	
 	public static boolean hasPermission(Player p, String command){
 
 		command = command.toLowerCase();
@@ -111,7 +113,7 @@ public class Slots extends JavaPlugin {
 
 				out = new BufferedWriter(new FileWriter(configFile));
 
-				out.write("tick-delay: 50\r\nop-only: true\r\n\r\npayout:\r\n    jackpot: 10000\r\n    red7: 3000\r\n    cherry: 1000\r\n    heart: 500\r\n    bar: 100\r\n");
+				out.write("tick-delay: 50\r\nop-only: true\r\n");
 
 				System.out.println("[Slots] Created/wrote default config.");
 

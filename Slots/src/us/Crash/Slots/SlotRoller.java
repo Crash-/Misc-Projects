@@ -85,10 +85,11 @@ public class SlotRoller implements Runnable {
 			roller.sendMessage(ChatColor.RED + "There was no roll to match the random value.");
 		else {
 			Slots.outputMessage(roller, addChatColor(ChatColor.GOLD + "You rolled a " + rolled.getName() + "."));
+			roll[numRolled] = index;
 			line = addSignColor(ChatColor.stripColor(line).substring(0, 4 * numRolled) + rolled.getSymbol() + ChatColor.stripColor(line).substring(4 * numRolled + 1));
 			myMachine.getSign().setLine(2, line);
 			myMachine.getSign().update();
-			roll[numRolled] = index;
+			
 			
 		}
 		
@@ -110,15 +111,29 @@ public class SlotRoller implements Runnable {
 	}
 	
 	public String addSignColor(String line){
+	
+		int place = 0;
+		StringBuilder b = new StringBuilder("");
+		String[] split = new String[3];
+		for(int i = 0; i < 3; i++)
+			split[i] = line.substring(i * 3, (i + 1) * 3);
 		
-		for(SlotData d : Slots.rollInfo){
-		
-			StringBuilder b = new StringBuilder();
-			line = line.replace(d.getSymbol(), b.append(d.getColor()).append(d.getSymbol()).append(ChatColor.BLACK).toString());
+		for(String s : split){
 			
+			if(place <= numRolled){
+				
+				SlotData d = Slots.rollInfo.get(roll[place]);
+				b.append(s.replace(d.getSymbol(), new StringBuilder().append(d.getColor()).append(d.getSymbol()).append(ChatColor.BLACK).toString()));
+
+			} else {
+				
+				b.append(s);
+				
+			}
+			place++;
 		}
 		
-		return line;
+		return b.toString();
 		
 	}
 	
