@@ -15,14 +15,26 @@ public class SlotMachine {
 	protected boolean isRolling = false;
 	private Block mySign;
 	private double costPer;
+	private Account ownerAccount;
+	
+	public SlotMachine(Slots p, Block sign, double cost, Account account){
+		
+		plugin = p;
+		mySign = sign;
+		costPer = cost;
+		ownerAccount = account;
+		
+	}
 	
 	public SlotMachine(Slots p, Block sign, double cost){
 		
 		plugin = p;
 		mySign = sign;
 		costPer = cost;
+		ownerAccount = null;
 		
 	}
+	
 	
 	public void rollSlots(Player roller){
 		
@@ -41,6 +53,12 @@ public class SlotMachine {
 			roller.sendMessage(ChatColor.RED + "You do not have enough money for slots!");
 			isRolling = false;
 			return;
+			
+		}
+		if(ownerAccount != null){
+		
+			ownerAccount.add(costPer);
+			ownerAccount.save();
 			
 		}
 		account.subtract(costPer);
@@ -67,6 +85,8 @@ public class SlotMachine {
 	public Sign getSign(){ return (Sign)mySign.getState(); }
 	
 	public Block getBlock(){ return mySign; }
+	
+	public Account getAccount(){ return ownerAccount; }
 	
 	public double getCost(){ return costPer; }
 	

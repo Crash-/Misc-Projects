@@ -2,8 +2,11 @@ package us.Crash.Slots;
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Scanner;
 
+import com.nijiko.coelho.iConomy.iConomy;
+import com.nijiko.coelho.iConomy.system.Account;
 import com.nijikokun.bukkit.Permissions.*;
 import org.bukkit.ChatColor;
 import org.bukkit.block.Block;
@@ -23,7 +26,7 @@ import org.anjocaido.groupmanager.GroupManager;
 public class Slots extends JavaPlugin {
 
 	public static ArrayList<SlotMachine> slotsList = new ArrayList<SlotMachine>();
-	public static ArrayList<String> createSlot = new ArrayList<String>();
+	public static HashMap<String, String> createSlot = new HashMap<String, String>();
 	public static ArrayList<String> removeSlot = new ArrayList<String>();
 	public static ArrayList<SlotData> rollInfo = new ArrayList<SlotData>();
 	private static ArrayList<String> noDebugList = new ArrayList<String>();
@@ -246,16 +249,24 @@ public class Slots extends JavaPlugin {
 				return false;
 
 			}
-			
-			if(args[0].equalsIgnoreCase("try")){
-				
-				p.sendMessage(ChatColor.getByCode(Integer.parseInt(args[1])) + "YES!");
-				
-			}
 
 			if(args[0].equalsIgnoreCase("create")){
 
-				createSlot.add(p.getName());
+				String name = "";
+				
+				if(args.length == 2){
+				
+					name = args[1];
+					
+					if(name == null || !iConomy.getBank().hasAccount(name)){
+						
+						p.sendMessage(ChatColor.RED + name + " has no iConomy account!");
+						return false;
+						
+					}
+
+				}
+				createSlot.put(p.getName(), name);
 				p.sendMessage(ChatColor.GOLD + "Left click a sign to create the machine!");
 				return true;
 
@@ -419,6 +430,19 @@ public class Slots extends JavaPlugin {
 
 					int w = Integer.parseInt(data[0]), x = Integer.parseInt(data[1]), y = Integer.parseInt(data[2]), z = Integer.parseInt(data[3]);
 					double cost = Double.parseDouble(data[4]);
+					String name;
+					Account acc = null;
+					try {
+						 name = data[5];
+					} catch(ArrayIndexOutOfBoundsException e){
+						name = "";
+					}
+					
+					if(name != null && !name.isEmpty())
+						if(iConomy.getBank().hasAccount(name))
+							acc = iConomy.getBank().getAccount(name);
+						else
+							System.out.println("[Slots]iConomy has no account for " + name + ".");
 
 					Block b = getServer().getWorlds().get(w).getBlockAt(x, y, z);
 
@@ -436,7 +460,10 @@ public class Slots extends JavaPlugin {
 					((Sign)b.getState()).setLine(3, signLine);
 					((Sign)b.getState()).update();
 
-					slotsList.add(new SlotMachine(this, b, cost));
+					if(acc == null)
+						slotsList.add(new SlotMachine(this, b, cost));
+					else
+						slotsList.add(new SlotMachine(this, b, cost, acc));
 
 					i++;
 
@@ -541,7 +568,8 @@ public class Slots extends JavaPlugin {
 				StringBuilder builder = new StringBuilder();
 				builder.append("\"").append(m.getSign().getLine(3)).append("\"=").append(getServer().getWorlds().indexOf(m.getBlock().getWorld())).
 				append(",").append(m.getBlock().getLocation().getBlockX()).append(",").append(m.getBlock().getLocation().getBlockY()).
-				append(",").append(m.getBlock().getLocation().getBlockZ()).append(",").append(m.getCost()).append("\r\n");
+				append(",").append(m.getBlock().getLocation().getBlockZ()).append(",").append(m.getCost()).append("\r\n").
+				append(",").append(m.getAccount() == null ? "" : m.getAccount().getName()).append("\r\n");
 				out.write(builder.toString());
 
 			}
@@ -631,15 +659,18 @@ class BListener extends BlockListener {
 
 		if(event.getBlock().getTypeId() == 63 || event.getBlock().getTypeId() == 68){
 
-			if(Slots.createSlot.contains(event.getPlayer().getName())){
+			if(Slots.createSlot.containsKey(event.getPlayer().getName())){
 
 				Sign sign = (Sign)event.getBlock().getState();
+				String name = Slots.createSlot.get(event.getPlayer().getName());
 				Slots.createSlot.remove(event.getPlayer().getName());
-
+				Account acc = null;
+				if(name != null && iConomy.getBank().hasAccount(name))
+					acc = iConomy.getBank().getAccount(name);
+				
 				if(ChatColor.stripColor(sign.getLine(0)).equalsIgnoreCase("[Slots]")){
 
 					Double cost = null;
-
 					if(Slots.getMachine(event.getBlock()) != null){
 
 						event.getPlayer().sendMessage(ChatColor.RED + "This is already a slot machine!");
@@ -657,11 +688,19 @@ class BListener extends BlockListener {
 						return;
 
 					}
-
-					Slots.slotsList.add(new SlotMachine(plugin, event.getBlock(), cost));
+					if(acc == null){
+						
+						Slots.slotsList.add(new SlotMachine(plugin, event.getBlock(), cost));
+						event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created.");
+						
+					} else {
+						
+						Slots.slotsList.add(new SlotMachine(plugin, event.getBlock(), cost, acc));
+						event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created and linked with " + name + "'s iConomy account.");
+						
+					}
 					sign.setLine(0, ChatColor.YELLOW + sign.getLine(0));
 					sign.update();
-					event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created.");
 
 				}
 
