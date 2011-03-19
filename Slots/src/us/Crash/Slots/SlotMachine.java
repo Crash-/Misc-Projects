@@ -13,25 +13,28 @@ public class SlotMachine {
 	private SlotRoller myRoller;
 	private Slots plugin;
 	protected boolean isRolling = false;
+	private int usesAmount;
 	private Block mySign;
 	private double costPer;
 	private Account ownerAccount;
 	
-	public SlotMachine(Slots p, Block sign, double cost, Account account){
+	public SlotMachine(Slots p, Block sign, double cost, Account account, int uses){
 		
 		plugin = p;
 		mySign = sign;
 		costPer = cost;
 		ownerAccount = account;
+		usesAmount = uses;
 		
 	}
 	
-	public SlotMachine(Slots p, Block sign, double cost){
+	public SlotMachine(Slots p, Block sign, double cost, int uses){
 		
 		plugin = p;
 		mySign = sign;
 		costPer = cost;
 		ownerAccount = null;
+		usesAmount = uses;
 		
 	}
 	
@@ -67,7 +70,7 @@ public class SlotMachine {
 		getSign().update();
 		myRoller = new SlotRoller(this);
 		myRoller.setTask(plugin.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, myRoller, plugin.tickDelay, plugin.tickDelay), roller);
-		
+		usesAmount++;
 		
 	}
 	
@@ -98,5 +101,7 @@ public class SlotMachine {
 			   b.getWorld().equals(mySign.getWorld());
 		
 	}
+	
+	public int getUses(){ return usesAmount; }
 	
 }

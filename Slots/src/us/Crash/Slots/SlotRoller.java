@@ -10,7 +10,7 @@ public class SlotRoller implements Runnable {
 
 	private SlotMachine myMachine;
 	private int taskId, numRolled = 0;
-	private int[] roll = new int[3];
+	private int[] roll = { -1, -1, -1 };
 	private Player roller;
 	
 	public SlotRoller(SlotMachine m){
@@ -28,7 +28,25 @@ public class SlotRoller implements Runnable {
 			if(roll[0] == roll[1] && roll[1] == roll[2]){
 				
 				double winningAmount = myMachine.getCost() * Slots.rollInfo.get(roll[0]).getPay();
-				roller.sendMessage(ChatColor.GOLD + "Congratulations you won " + iConomy.getBank().format(winningAmount) + "!");
+				if(myMachine.getAccount() != null){
+					
+					if(myMachine.getAccount().getBalance() - winningAmount < 0){
+						
+						roller.sendMessage(ChatColor.GOLD + "Sorry, the owner's account has run out of money, you won " + iConomy.getBank().format(myMachine.getAccount().getBalance()) + ".");
+						winningAmount = myMachine.getAccount().getBalance();
+						
+					} else {
+						
+						roller.sendMessage(ChatColor.GOLD + "Congratulations you won " + iConomy.getBank().format(winningAmount) + "!");
+						
+					}
+					
+				} else {
+				
+					roller.sendMessage(ChatColor.GOLD + "Congratulations you won " + iConomy.getBank().format(winningAmount) + "!");
+					
+				}
+				
 				Account account = iConomy.getBank().getAccount(roller.getName());
 				if(account == null){
 					
@@ -36,6 +54,12 @@ public class SlotRoller implements Runnable {
 					
 				} else {
 					
+					if(myMachine.getAccount() != null){
+						
+						myMachine.getAccount().subtract(winningAmount);
+						myMachine.getAccount().save();
+						
+					}
 					account.add(winningAmount);
 					account.save();
 					
@@ -43,7 +67,58 @@ public class SlotRoller implements Runnable {
 				
 			} else { 
 			
-				roller.sendMessage(ChatColor.GOLD + "Sorry, you lost.");
+				boolean gotCombo = false;
+				
+				for(SlotCombo c : Slots.comboList){
+					
+					if(c.compare(roll)){
+						
+						double pay = c.getPay();
+						gotCombo = true;
+						roller.sendMessage(ChatColor.GOLD + "You got a combo!");
+						
+						if(myMachine.getAccount() != null){
+							
+							if(!myMachine.getAccount().hasEnough(c.getPay())){
+								
+								roller.sendMessage(ChatColor.GOLD + "Sorry, the owner's account has run out of money, you won " + iConomy.getBank().format(myMachine.getAccount().getBalance()) + ".");
+								pay = myMachine.getAccount().getBalance();
+								
+							} else {
+								
+								roller.sendMessage(ChatColor.GOLD + "You won " + iConomy.getBank().format(c.getPay()) + "!");
+								
+							}
+							
+						} else {
+							
+							roller.sendMessage(ChatColor.GOLD + "You won " + iConomy.getBank().format(c.getPay()) + "!");
+							
+						}
+						
+						Account account = iConomy.getBank().getAccount(roller.getName());
+						if(account == null)
+							roller.sendMessage(ChatColor.RED + "Could not find an iConomy account for you.");
+						else {
+							
+							if(myMachine.getAccount() != null){
+								
+								myMachine.getAccount().subtract(pay);
+								myMachine.getAccount().save();
+								
+							}
+							account.add(pay);
+							account.save();
+							
+						}
+						
+						break;
+						
+					}
+					
+				}
+				if(!gotCombo)
+					roller.sendMessage(ChatColor.GOLD + "Sorry, you lost.");
 				
 			}
 			myMachine.getPlugin().getServer().getScheduler().cancelTask(taskId);
@@ -84,8 +159,8 @@ public class SlotRoller implements Runnable {
 		if(rolled == null)
 			roller.sendMessage(ChatColor.RED + "There was no roll to match the random value.");
 		else {
-			Slots.outputMessage(roller, addChatColor(ChatColor.GOLD + "You rolled a " + rolled.getName() + "."));
 			roll[numRolled] = index;
+			Slots.outputMessage(roller, addChatColor(ChatColor.GOLD + "You rolled a " + rolled.getName() + "."));
 			line = addSignColor(ChatColor.stripColor(line).substring(0, 4 * numRolled) + rolled.getSymbol() + ChatColor.stripColor(line).substring(4 * numRolled + 1));
 			myMachine.getSign().setLine(2, line);
 			myMachine.getSign().update();
@@ -99,14 +174,10 @@ public class SlotRoller implements Runnable {
 		
 	public String addChatColor(String line){
 		
-		for(SlotData d : Slots.rollInfo){
+		SlotData d = Slots.rollInfo.get(roll[numRolled]);
 		
-			StringBuilder b = new StringBuilder();
-			line = line.replace(d.getName(), b.append(d.getColor()).append(d.getName()).append(ChatColor.GOLD).toString());
-			
-		}
-		
-		return line;
+		StringBuilder b = new StringBuilder();
+		return line.replace(d.getName(), b.append(d.getColor()).append(d.getName()).append(ChatColor.GOLD).toString());
 		
 	}
 	
