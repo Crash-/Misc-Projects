@@ -2,6 +2,7 @@ package us.Crash.Slots;
 
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 
 import com.nijiko.coelho.iConomy.iConomy;
 import com.nijiko.coelho.iConomy.system.Account;
@@ -25,6 +26,7 @@ public class SlotRoller implements Runnable {
 		if(numRolled == 3){
 			
 			myMachine.isRolling = false;
+					
 			if(roll[0] == roll[1] && roll[1] == roll[2]){
 				
 				double winningAmount = myMachine.getCost() * Slots.rollInfo.get(roll[0]).getPay();
@@ -65,7 +67,7 @@ public class SlotRoller implements Runnable {
 					
 				}
 				
-			} else { 
+			} else {
 			
 				boolean gotCombo = false;
 				
@@ -156,9 +158,13 @@ public class SlotRoller implements Runnable {
 			
 		}
 		
-		if(rolled == null)
+		if(rolled == null){
+			
 			roller.sendMessage(ChatColor.RED + "There was no roll to match the random value.");
-		else {
+			myMachine.getPlugin().getServer().getScheduler().cancelTask(taskId);
+			return;
+			
+		} else {
 			roll[numRolled] = index;
 			Slots.outputMessage(roller, addChatColor(ChatColor.GOLD + "You rolled a " + rolled.getName() + "."));
 			line = addSignColor(ChatColor.stripColor(line).substring(0, 4 * numRolled) + rolled.getSymbol() + ChatColor.stripColor(line).substring(4 * numRolled + 1));

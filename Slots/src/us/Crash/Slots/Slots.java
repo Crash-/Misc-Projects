@@ -8,6 +8,7 @@ import com.nijiko.coelho.iConomy.iConomy;
 import com.nijiko.coelho.iConomy.system.Account;
 import com.nijikokun.bukkit.Permissions.*;
 import org.bukkit.ChatColor;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
 import org.bukkit.command.Command;
@@ -237,7 +238,7 @@ public class Slots extends JavaPlugin {
 
 		getServer().getPluginManager().registerEvent(Event.Type.BLOCK_RIGHTCLICKED, blockListener, Event.Priority.Normal, this);
 		getServer().getPluginManager().registerEvent(Event.Type.BLOCK_DAMAGED, blockListener, Event.Priority.Normal, this);
-		getServer().getPluginManager().registerEvent(Event.Type.BLOCK_BREAK, blockListener, Event.Priority.Normal, this);
+		getServer().getPluginManager().registerEvent(Event.Type.BLOCK_BREAK, blockListener, Event.Priority.High, this);
 
 		System.out.println("[Slots] Slots v" + getDescription().getVersion() + " enabled, by Crash");
 
@@ -414,11 +415,17 @@ public class Slots extends JavaPlugin {
 						return false;
 
 					}
-
+					
 					tickDelay = newtick;
 					p.sendMessage(ChatColor.GREEN + "You set the new tick delay.");
 					return true;
 
+				} else if(args[1].equals("ownership")){
+					
+					requireOwnership = !requireOwnership;
+					p.sendMessage(ChatColor.GREEN + "Toggled require-ownership.");
+					return true;
+					
 				}
 
 			} else if(args[0].equalsIgnoreCase("info")){
@@ -747,7 +754,7 @@ class BListener extends BlockListener {
 
 	@Override
 	public void onBlockBreak(BlockBreakEvent event){
-
+		
 		Block b = event.getBlock();
 		SlotMachine m = Slots.getMachine(b);
 
