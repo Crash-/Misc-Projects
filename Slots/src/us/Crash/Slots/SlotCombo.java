@@ -18,7 +18,7 @@ public class SlotCombo {
 		
 		for(int index : rolls){
 			
-			SlotData d = Slots.rollInfo.get(index);
+			SlotData d = Slots.getSlotData().get(index);
 			
 			if(!d.getName().equalsIgnoreCase(comboNames[i]))
 				return false;

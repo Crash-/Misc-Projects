@@ -29,7 +29,7 @@ public class SlotRoller implements Runnable {
 					
 			if(roll[0] == roll[1] && roll[1] == roll[2]){
 				
-				double winningAmount = myMachine.getCost() * Slots.rollInfo.get(roll[0]).getPay();
+				double winningAmount = myMachine.getCost() * Slots.getSlotData().get(roll[0]).getPay();
 				if(myMachine.getAccount() != null){
 					
 					if(myMachine.getAccount().getBalance() - winningAmount < 0){
@@ -71,7 +71,7 @@ public class SlotRoller implements Runnable {
 			
 				boolean gotCombo = false;
 				
-				for(SlotCombo c : Slots.comboList){
+				for(SlotCombo c : Slots.getSlotCombos()){
 					
 					if(c.compare(roll)){
 						
@@ -142,7 +142,7 @@ public class SlotRoller implements Runnable {
 		
 		SlotData rolled = null;
 		
-		for(SlotData d : Slots.rollInfo){
+		for(SlotData d : Slots.getSlotData()){
 		
 			current += d.getChance();
 			
@@ -180,7 +180,7 @@ public class SlotRoller implements Runnable {
 		
 	public String addChatColor(String line){
 		
-		SlotData d = Slots.rollInfo.get(roll[numRolled]);
+		SlotData d = Slots.getSlotData().get(roll[numRolled]);
 		
 		StringBuilder b = new StringBuilder();
 		return line.replace(d.getName(), b.append(d.getColor()).append(d.getName()).append(ChatColor.GOLD).toString());
@@ -199,7 +199,7 @@ public class SlotRoller implements Runnable {
 			
 			if(place <= numRolled){
 				
-				SlotData d = Slots.rollInfo.get(roll[place]);
+				SlotData d = Slots.getSlotData().get(roll[place]);
 				b.append(s.replace(d.getSymbol(), new StringBuilder().append(d.getColor()).append(d.getSymbol()).append(ChatColor.BLACK).toString()));
 
 			} else {

@@ -10,6 +10,7 @@ import com.nijikokun.bukkit.Permissions.*;
 import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.Furnace;
 import org.bukkit.block.Sign;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -25,10 +26,10 @@ import org.anjocaido.groupmanager.GroupManager;
 
 public class Slots extends JavaPlugin {
 
-	public static ArrayList<SlotMachine> slotsList = new ArrayList<SlotMachine>();
-	public static SlotSelectors Selectors = new SlotSelectors();
-	public static ArrayList<SlotCombo> comboList = new ArrayList<SlotCombo>();
-	public static ArrayList<SlotData> rollInfo = new ArrayList<SlotData>();
+	private static ArrayList<SlotMachine> slotsList = new ArrayList<SlotMachine>();
+	private static SlotSelectors Selectors = new SlotSelectors();
+	private static ArrayList<SlotCombo> comboList = new ArrayList<SlotCombo>();
+	private static ArrayList<SlotData> rollInfo = new ArrayList<SlotData>();
 	private static ArrayList<String> noDebugList = new ArrayList<String>();
 	public boolean isOPOnly = true, requireOwnership = false;
 	public int tickDelay = 50;
@@ -36,6 +37,16 @@ public class Slots extends JavaPlugin {
 	public static GroupManager GroupManager = null;
 	private File configFile, saveFile, rollsFile, combosFile;
 
+	public static ArrayList<SlotMachine> getSlotList(){ return slotsList; }
+	
+	public static SlotSelectors getSlotSelectors(){ return Selectors; }
+	
+	public static ArrayList<SlotCombo> getSlotCombos(){ return comboList; }
+	
+	public static ArrayList<SlotData> getSlotData(){ return rollInfo; }
+	
+	public static ArrayList<String> getNoDebugList(){ return noDebugList; }
+	
 	public static boolean hasPermission(Player p, String command){
 
 		command = command.toLowerCase();
@@ -89,7 +100,6 @@ public class Slots extends JavaPlugin {
 	@Override
 	public void onDisable() {
 
-		saveData();
 		System.out.println("[Slots] Slots v" + getDescription().getVersion() + " disabled.");
 
 	}
@@ -772,9 +782,9 @@ class BListener extends BlockListener {
 
 		if(event.getBlock().getTypeId() == 63 || event.getBlock().getTypeId() == 68){
 
-			int type = Slots.Selectors.getType(event.getPlayer().getName());
-			String account = Slots.Selectors.getAccount(event.getPlayer().getName());
-			Slots.Selectors.remove(event.getPlayer().getName());
+			int type = Slots.getSlotSelectors().getType(event.getPlayer().getName());
+			String account = Slots.getSlotSelectors().getAccount(event.getPlayer().getName());
+			Slots.getSlotSelectors().remove(event.getPlayer().getName());
 			if(type == 0){
 
 				Sign sign = (Sign)event.getBlock().getState();
@@ -804,17 +814,18 @@ class BListener extends BlockListener {
 					}
 					if(acc == null){
 
-						Slots.slotsList.add(new SlotMachine(plugin, event.getBlock(), cost, 0));
+						Slots.getSlotList().add(new SlotMachine(plugin, event.getBlock(), cost, 0));
 						event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created.");
 
 					} else {
 
-						Slots.slotsList.add(new SlotMachine(plugin, event.getBlock(), cost, acc, 0));
+						Slots.getSlotList().add(new SlotMachine(plugin, event.getBlock(), cost, acc, 0));
 						event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created and linked with " + account + "'s iConomy account.");
 
 					}
 					sign.setLine(0, ChatColor.YELLOW + sign.getLine(0));
 					sign.update();
+					plugin.saveData();
 
 				}
 
@@ -825,7 +836,7 @@ class BListener extends BlockListener {
 				if(m == null)
 					return;
 
-				Slots.slotsList.remove(m);
+				Slots.getSlotList().remove(m);
 
 				m.stopRoller();
 				m.getSign().setLine(0, "[Slots]");
