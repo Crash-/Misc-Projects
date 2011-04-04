@@ -61,11 +61,9 @@ public class SlotMachine {
 		if(ownerAccount != null){
 		
 			ownerAccount.add(costPer);
-			ownerAccount.save();
 			
 		}
 		account.subtract(costPer);
-		account.save();
 		getSign().setLine(2, "  |   |  ");
 		getSign().update();
 		myRoller = new SlotRoller(this);

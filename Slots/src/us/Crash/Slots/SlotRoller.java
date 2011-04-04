@@ -59,11 +59,9 @@ public class SlotRoller implements Runnable {
 					if(myMachine.getAccount() != null){
 						
 						myMachine.getAccount().subtract(winningAmount);
-						myMachine.getAccount().save();
 						
 					}
 					account.add(winningAmount);
-					account.save();
 					
 				}
 				
@@ -106,11 +104,9 @@ public class SlotRoller implements Runnable {
 							if(myMachine.getAccount() != null){
 								
 								myMachine.getAccount().subtract(pay);
-								myMachine.getAccount().save();
 								
 							}
 							account.add(pay);
-							account.save();
 							
 						}
 						
@@ -131,6 +127,7 @@ public class SlotRoller implements Runnable {
 		if(numRolled > 5){//Should never happen.
 			
 			myMachine.getPlugin().getServer().getScheduler().cancelTask(taskId);
+			myMachine.isRolling = false;
 			return;
 			
 		}
@@ -161,6 +158,7 @@ public class SlotRoller implements Runnable {
 		if(rolled == null){
 			
 			roller.sendMessage(ChatColor.RED + "There was no roll to match the random value.");
+			myMachine.isRolling = false;
 			myMachine.getPlugin().getServer().getScheduler().cancelTask(taskId);
 			return;
 			

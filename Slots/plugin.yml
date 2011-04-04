@@ -1,5 +1,5 @@
 name: Slots
-version: 0.4
+version: 0.5
 main: us.Crash.Slots.Slots
 commands:
   slots:

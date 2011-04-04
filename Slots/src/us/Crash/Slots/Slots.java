@@ -8,21 +8,19 @@ import com.nijiko.coelho.iConomy.iConomy;
 import com.nijiko.coelho.iConomy.system.Account;
 import com.nijikokun.bukkit.Permissions.*;
 import org.bukkit.ChatColor;
-import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.block.Furnace;
 import org.bukkit.block.Sign;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockDamageEvent;
 import org.bukkit.event.block.BlockListener;
-import org.bukkit.event.block.BlockRightClickEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerListener;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.config.Configuration;
-import org.anjocaido.groupmanager.GroupManager;
 
 public class Slots extends JavaPlugin {
 
@@ -34,7 +32,6 @@ public class Slots extends JavaPlugin {
 	public boolean isOPOnly = true, requireOwnership = false;
 	public int tickDelay = 50;
 	public static Permissions Permissions = null;
-	public static GroupManager GroupManager = null;
 	private File configFile, saveFile, rollsFile, combosFile;
 
 	public static ArrayList<SlotMachine> getSlotList(){ return slotsList; }
@@ -51,7 +48,7 @@ public class Slots extends JavaPlugin {
 
 		command = command.toLowerCase();
 
-		if(Permissions == null && GroupManager == null)
+		if(Permissions == null)
 			return p.isOp();
 
 		if(Permissions != null){
@@ -68,21 +65,6 @@ public class Slots extends JavaPlugin {
 				return Permissions.getHandler().permission(p, "slots.set");
 			if(command.equals("info"))
 				return Permissions.getHandler().permission(p, "slots.info");
-
-		} else if(GroupManager != null){
-
-			if(command.equals("create"))
-				return GroupManager.getWorldsHolder().getWorldPermissions(p).has(p, "slots.create");
-			if(command.equals("remove"))
-				return GroupManager.getWorldsHolder().getWorldPermissions(p).has(p, "slots.remove");
-			if(command.equals("save"))
-				return GroupManager.getWorldsHolder().getWorldPermissions(p).has(p, "slots.save");
-			if(command.equals("reload"))
-				return GroupManager.getWorldsHolder().getWorldPermissions(p).has(p, "slots.load");
-			if(command.equals("set"))
-				return GroupManager.getWorldsHolder().getWorldPermissions(p).has(p, "slots.set");
-			if(command.equals("info"))
-				return GroupManager.getWorldsHolder().getWorldPermissions(p).has(p, "slots.info");
 
 		}
 
@@ -108,6 +90,7 @@ public class Slots extends JavaPlugin {
 	public void onEnable() {
 
 		BListener blockListener = new BListener(this);
+		PListener playerListener = new PListener(this);
 		rollsFile = new File("plugins/Slots/rolls.txt");
 		configFile = new File("plugins/Slots/config.yml");
 		saveFile = new File("plugins/Slots/slots.txt");
@@ -215,27 +198,18 @@ public class Slots extends JavaPlugin {
 
 		Permissions = (Permissions)getServer().getPluginManager().getPlugin("Permissions");
 		if(Permissions == null){
-
-			GroupManager = (GroupManager)getServer().getPluginManager().getPlugin("GroupManager");
-
-			if(GroupManager == null)
 				if(isOPOnly)
 					System.out.println("[Slots] Cannot find Permissions, switching to OP-only.");
 				else
 					System.out.println("[Slots] Warning : Cannot find a permissions plugin, there are no restrictions on commands now!");
-
 		}
 
 		if(Permissions != null){
 
 			System.out.println("[Slots] Using Permissions plugin for permissions.");
 
-		} else if(GroupManager != null){
-
-			System.out.println("[Slots] Using GroupManager plugin for permissions.");
-
 		}
-
+		
 		if(getServer().getPluginManager().getPlugin("iConomy") == null){
 
 			System.out.println("[Slots] Error : Unable to find iConomy plugin.");
@@ -246,8 +220,7 @@ public class Slots extends JavaPlugin {
 
 		loadData();
 
-		getServer().getPluginManager().registerEvent(Event.Type.BLOCK_RIGHTCLICKED, blockListener, Event.Priority.Normal, this);
-		getServer().getPluginManager().registerEvent(Event.Type.BLOCK_DAMAGED, blockListener, Event.Priority.Normal, this);
+		getServer().getPluginManager().registerEvent(Event.Type.PLAYER_INTERACT, playerListener, Event.Priority.Normal, this);
 		getServer().getPluginManager().registerEvent(Event.Type.BLOCK_BREAK, blockListener, Event.Priority.High, this);
 
 		System.out.println("[Slots] Slots v" + getDescription().getVersion() + " enabled, by Crash");
@@ -325,15 +298,6 @@ public class Slots extends JavaPlugin {
 
 			} else if(args[0].equals("load")){
 
-				slotsList.clear();
-				slotsList = new ArrayList<SlotMachine>();
-				comboList.clear();
-				comboList = new ArrayList<SlotCombo>();
-				rollInfo.clear();
-				rollInfo = new ArrayList<SlotData>();
-				noDebugList.clear();
-				noDebugList = new ArrayList<String>();
-				Selectors = new SlotSelectors();
 				if(loadData())
 					p.sendMessage(ChatColor.GREEN + "Reloaded files successfully.");
 				else
@@ -453,6 +417,12 @@ public class Slots extends JavaPlugin {
 
 	public boolean loadData(){
 
+		ArrayList<SlotMachine> tempSlots = new ArrayList<SlotMachine>();
+		ArrayList<SlotCombo> tempCombos = new ArrayList<SlotCombo>();
+		ArrayList<SlotData> tempRolls = new ArrayList<SlotData>();
+		noDebugList.clear();
+		Selectors = new SlotSelectors();
+		
 		Configuration config = new Configuration(configFile);
 		config.load();
 
@@ -521,9 +491,9 @@ public class Slots extends JavaPlugin {
 					((Sign)b.getState()).update();
 
 					if(acc == null)
-						slotsList.add(new SlotMachine(this, b, cost, uses));
+						tempSlots.add(new SlotMachine(this, b, cost, uses));
 					else
-						slotsList.add(new SlotMachine(this, b, cost, acc, uses));
+						tempSlots.add(new SlotMachine(this, b, cost, acc, uses));
 
 					i++;
 
@@ -579,7 +549,7 @@ public class Slots extends JavaPlugin {
 					chance1 = Integer.parseInt(line.split("/")[0]);
 					chance2 = Integer.parseInt(line.split("/")[1]);
 					line = s.nextLine().split("=")[1];
-					rollInfo.add(new SlotData(name, symb, ChatColor.getByCode(Integer.parseInt(line)), pay, chance1, chance2));
+					tempRolls.add(new SlotData(name, symb, ChatColor.getByCode(Integer.parseInt(line)), pay, chance1, chance2));
 
 				} catch(Exception e){
 
@@ -618,7 +588,7 @@ public class Slots extends JavaPlugin {
 					String[] names = line.split("=")[0].split(":");
 					double pay = Double.parseDouble(line.split("=")[1]);
 
-					comboList.add(new SlotCombo(names, pay));
+					tempCombos.add(new SlotCombo(names, pay));
 
 				} catch(Exception e){
 
@@ -634,6 +604,10 @@ public class Slots extends JavaPlugin {
 
 		}
 
+		slotsList = tempSlots;
+		comboList = tempCombos;
+		rollInfo = tempRolls;
+		
 		return true;
 
 	}
@@ -752,6 +726,130 @@ public class Slots extends JavaPlugin {
 
 }
 
+class PListener extends PlayerListener {
+	
+	Slots plugin;
+
+	public PListener(Slots p){
+
+		plugin = p;
+
+	}
+	
+	@Override
+	public void onPlayerInteract(PlayerInteractEvent event){
+		
+		if(event.getAction().equals(Action.RIGHT_CLICK_BLOCK)){
+			
+			Block b = event.getClickedBlock();
+
+			SlotMachine m = Slots.getMachine(b);
+			if(m == null)
+				return;
+
+			if(!m.isRolling())
+				m.rollSlots(event.getPlayer());
+			else
+				event.getPlayer().sendMessage(ChatColor.RED + "This slot machine is already rolling.");
+			
+		} else if(event.getAction().equals(Action.LEFT_CLICK_BLOCK)){
+			
+			Block b = event.getClickedBlock();
+			
+			if(b.getTypeId() == 63 || b.getTypeId() == 68){
+
+				int type = Slots.getSlotSelectors().getType(event.getPlayer().getName());
+				String account = Slots.getSlotSelectors().getAccount(event.getPlayer().getName());
+				Slots.getSlotSelectors().remove(event.getPlayer().getName());
+				if(type == 0){
+
+					Sign sign = (Sign)b.getState();
+					Account acc = null;
+					if(account != null && iConomy.getBank().hasAccount(account))
+						acc = iConomy.getBank().getAccount(account);
+
+					if(ChatColor.stripColor(sign.getLine(0)).equalsIgnoreCase("[Slots]")){
+
+						Double cost = null;
+						if(Slots.getMachine(b) != null){
+
+							event.getPlayer().sendMessage(ChatColor.RED + "This is already a slot machine!");
+							return;
+
+						}
+
+						try {
+
+							cost = Double.parseDouble(sign.getLine(1));
+
+						} catch(Exception e){
+
+							event.getPlayer().sendMessage(ChatColor.RED + "Unable to get the cost..");
+							return;
+
+						}
+						if(!plugin.loadData()){
+							
+							event.getPlayer().sendMessage(ChatColor.RED + "Error while attempting to load data.");
+							return;
+							
+						}
+							
+						if(acc == null){
+
+							Slots.getSlotList().add(new SlotMachine(plugin, b, cost, 0));
+							event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created.");
+
+						} else {
+
+							Slots.getSlotList().add(new SlotMachine(plugin, b, cost, acc, 0));
+							event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created and linked with " + account + "'s iConomy account.");
+
+						}
+						sign.setLine(0, ChatColor.YELLOW + sign.getLine(0));
+						sign.update();
+						plugin.saveData();
+						
+					}
+
+				}
+				if(type == 1){
+
+					SlotMachine m = Slots.getMachine(b);
+					if(m == null)
+						return;
+
+					Slots.getSlotList().remove(m);
+
+					m.stopRoller();
+					m.getSign().setLine(0, "[Slots]");
+
+					event.getPlayer().sendMessage(ChatColor.GREEN + "The slot machine was removed.");
+
+				}
+				if(type == 2){
+					
+					SlotMachine m = Slots.getMachine(b);
+					if(m == null)
+						return;
+					
+					Account acc = m.getAccount();
+					Player p = event.getPlayer();
+					p.sendMessage(ChatColor.GOLD + "Owner account : " + (acc == null ? "<none>" : acc.getName()));
+					p.sendMessage(ChatColor.GOLD + "Balance left : " + (acc == null ? "infinite" : "" + acc.getBalance()));
+					p.sendMessage(ChatColor.GOLD + "Cost : " + m.getCost());
+					p.sendMessage(ChatColor.GOLD + "Uses : " + m.getUses());
+					
+				}
+
+			}
+			
+		}
+		
+	}
+	
+}
+
 class BListener extends BlockListener {
 
 	Slots plugin;
@@ -765,7 +863,7 @@ class BListener extends BlockListener {
 	@Override
 	public void onBlockBreak(BlockBreakEvent event){
 		
-		Block b = event.getBlock();
+		Block b = (org.bukkit.block.Block)event.getBlock();
 		SlotMachine m = Slots.getMachine(b);
 
 		if(m == null)
@@ -777,107 +875,5 @@ class BListener extends BlockListener {
 
 	}
 
-	@Override
-	public void onBlockDamage(BlockDamageEvent event){
-
-		if(event.getBlock().getTypeId() == 63 || event.getBlock().getTypeId() == 68){
-
-			int type = Slots.getSlotSelectors().getType(event.getPlayer().getName());
-			String account = Slots.getSlotSelectors().getAccount(event.getPlayer().getName());
-			Slots.getSlotSelectors().remove(event.getPlayer().getName());
-			if(type == 0){
-
-				Sign sign = (Sign)event.getBlock().getState();
-				Account acc = null;
-				if(account != null && iConomy.getBank().hasAccount(account))
-					acc = iConomy.getBank().getAccount(account);
-
-				if(ChatColor.stripColor(sign.getLine(0)).equalsIgnoreCase("[Slots]")){
-
-					Double cost = null;
-					if(Slots.getMachine(event.getBlock()) != null){
-
-						event.getPlayer().sendMessage(ChatColor.RED + "This is already a slot machine!");
-						return;
-
-					}
-
-					try {
-
-						cost = Double.parseDouble(sign.getLine(1));
-
-					} catch(Exception e){
-
-						event.getPlayer().sendMessage(ChatColor.RED + "Unable to get the cost..");
-						return;
-
-					}
-					if(acc == null){
-
-						Slots.getSlotList().add(new SlotMachine(plugin, event.getBlock(), cost, 0));
-						event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created.");
-
-					} else {
-
-						Slots.getSlotList().add(new SlotMachine(plugin, event.getBlock(), cost, acc, 0));
-						event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created and linked with " + account + "'s iConomy account.");
-
-					}
-					sign.setLine(0, ChatColor.YELLOW + sign.getLine(0));
-					sign.update();
-					plugin.saveData();
-
-				}
-
-			}
-			if(type == 1){
-
-				SlotMachine m = Slots.getMachine(event.getBlock());
-				if(m == null)
-					return;
-
-				Slots.getSlotList().remove(m);
-
-				m.stopRoller();
-				m.getSign().setLine(0, "[Slots]");
-
-				event.getPlayer().sendMessage(ChatColor.GREEN + "The slot machine was removed.");
-
-			}
-			if(type == 2){
-				
-				SlotMachine m = Slots.getMachine(event.getBlock());
-				if(m == null)
-					return;
-				
-				Account acc = m.getAccount();
-				Player p = event.getPlayer();
-				p.sendMessage(ChatColor.GOLD + "Owner account : " + (acc == null ? "<none>" : acc.getName()));
-				p.sendMessage(ChatColor.GOLD + "Balance left : " + (acc == null ? "infinite" : "" + acc.getBalance()));
-				p.sendMessage(ChatColor.GOLD + "Cost : " + m.getCost());
-				p.sendMessage(ChatColor.GOLD + "Uses : " + m.getUses());
-				
-			}
-
-		}
-
-	}
-
-	@Override
-	public void onBlockRightClick(BlockRightClickEvent event){
-
-		Block b = event.getBlock();
-
-		SlotMachine m = Slots.getMachine(b);
-		if(m == null)
-			return;
-
-		if(!m.isRolling())
-			m.rollSlots(event.getPlayer());
-		else
-			event.getPlayer().sendMessage(ChatColor.RED + "This slot machine is already rolling.");
-
-
-	}
 
 }
