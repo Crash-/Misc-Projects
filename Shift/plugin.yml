@@ -1,0 +1,7 @@
+name: Shift
+version: 0.1
+main: com.Crash.Shift.ShiftPlugin
+commands:
+  shift:
+    usage:
+    description:
