@@ -8,6 +8,7 @@ public class SlotSelectors {
 
 	private HashMap<String, Integer> selectorList = new HashMap<String, Integer>();
 	private HashMap<String, String> createList = new HashMap<String, String>();
+	private HashMap<String, Integer> moneyList = new HashMap<String, Integer>();
 	
 	public void addNewSelector(Player p, int type){
 		
@@ -22,6 +23,13 @@ public class SlotSelectors {
 		
 	}
 	
+	public void addNewMoneyPlayer(Player p, Integer amount){
+		
+		selectorList.put(p.getName(), (amount > 0 ? 4 : 5));
+		moneyList.put(p.getName(), amount);
+		
+	}
+	
 	public int getType(String name){
 		
 		Integer type = selectorList.get(name);
@@ -33,6 +41,12 @@ public class SlotSelectors {
 	public String getAccount(String player){
 		
 		return createList.get(player);
+		
+	}
+	
+	public Integer getAmount(String player){
+		
+		return moneyList.get(player);
 		
 	}
 	

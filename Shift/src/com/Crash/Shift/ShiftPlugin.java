@@ -22,7 +22,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
 import org.bukkit.util.config.Configuration;
 import org.bukkit.event.*;
-
 import com.nijikokun.bukkit.Permissions.*;
 
 public class ShiftPlugin extends JavaPlugin {
@@ -34,9 +33,10 @@ public class ShiftPlugin extends JavaPlugin {
 	private Permissions Permissions;
 	private PListener playerListener = new PListener(this);
 	private ArrayList<ShiftUser> shiftUsers = new ArrayList<ShiftUser>();
-	private ArrayList<Integer> allowedDestroyableItems = new ArrayList<Integer>();
-	private ArrayList<Integer> allowedMovableItems = new ArrayList<Integer>();
-	private ArrayList<Integer> allowedAttachedItems = new ArrayList<Integer>();
+	private ArrayList<Integer> allowedMoveThroughItems;
+	private ArrayList<Integer> allowedDestroyableItems;
+	private ArrayList<Integer> allowedMovableItems;
+	private ArrayList<Integer> allowedAttachedItems;
 	private HashMap<String, Long> cooldownTime = new HashMap<String, Long>();
 
 	public static void outputConsole(String s){
@@ -127,6 +127,12 @@ public class ShiftPlugin extends JavaPlugin {
 
 	public ArrayList<ShiftUser> getUsers(){ return shiftUsers; }
 
+	public ArrayList<Integer> getAllowedMoveThroughItems(){
+		
+		return allowedMoveThroughItems;
+		
+	}
+	
 	public ArrayList<Integer> getAllowedDestroyableItems(){
 		
 		return allowedDestroyableItems;
@@ -147,7 +153,7 @@ public class ShiftPlugin extends JavaPlugin {
 
 	public boolean canAttach(int id){
 
-		return allowedMovableItems.contains(id) || allowedAttachedItems.contains(id);
+		return (moveAttached && allowedAttachedItems.contains(id));
 
 	}
 
@@ -242,7 +248,7 @@ public class ShiftPlugin extends JavaPlugin {
 					} else if(args[0].equalsIgnoreCase("reload")){
 						
 						loadConfig(configFile);
-						p.sendMessage(ChatColor.GREEN + "Saved config successfully.");
+						p.sendMessage(ChatColor.GREEN + "Loaded config successfully.");
 						
 					} else {
 
@@ -275,6 +281,7 @@ public class ShiftPlugin extends JavaPlugin {
 		config.setProperty("move-tool.moveable-blocks", allowedMovableItems);
 		config.setProperty("move-tool.move-attached", moveAttached);
 		config.setProperty("move-tool.attached-moveable-blocks", allowedAttachedItems);
+		config.setProperty("move-tool.move-through-blocks", allowedMoveThroughItems);
 		config.setProperty("move-tool.move-players", movePlayers);
 		config.setProperty("move-tool.move-mobs", moveMobs);
 		config.setProperty("move-tool.attach-to-diagonals", moveAttachDiagonals);
@@ -288,6 +295,11 @@ public class ShiftPlugin extends JavaPlugin {
 
 	public void loadConfig(File f){
 
+		allowedAttachedItems = new ArrayList<Integer>();
+		allowedDestroyableItems = new ArrayList<Integer>();
+		allowedMovableItems = new ArrayList<Integer>();
+		allowedMoveThroughItems = new ArrayList<Integer>();
+		
 		Configuration config = new Configuration(f);
 		config.load();
 		moveToolId = config.getInt("move-tool.tool-id", 262);
@@ -304,6 +316,19 @@ public class ShiftPlugin extends JavaPlugin {
 			
 		}
 
+		blockIds = config.getList("move-tool.move-through-blocks");
+		if(blockIds != null){
+			for(Object o : blockIds)
+				if(o instanceof Integer)
+					allowedMoveThroughItems.add((Integer)o);
+		} else {
+			
+			allowedMoveThroughItems.add(8);
+			allowedMoveThroughItems.add(9);
+			allowedMoveThroughItems.add(10);
+			allowedMoveThroughItems.add(11);
+			
+		}
 		moveAttached = config.getBoolean("move-tool.move-attached", false);
 		if(moveAttached){
 
@@ -317,10 +342,6 @@ public class ShiftPlugin extends JavaPlugin {
 				allowedAttachedItems.add(1);
 				
 			}
-			
-		} else {
-			
-			allowedAttachedItems.add(1);
 			
 		}
 		movePlayers = config.getBoolean("move-tool.move-players", true);
@@ -391,8 +412,8 @@ public class ShiftPlugin extends JavaPlugin {
 
 	public boolean isSpecialBlock(Block b){
 
-		return b.getTypeId() == 6 || b.getTypeId() == 35 || b.getTypeId() == 37 || b.getTypeId() == 38 || b.getTypeId() == 39 || b.getTypeId() == 40 || b.getTypeId() == 50 || b.getTypeId() == 51 || b.getTypeId() == 53 || b.getTypeId() == 55 || b.getTypeId() == 59 || b.getTypeId() == 63 || b.getTypeId() == 64 || b.getTypeId() == 65 || b.getTypeId() == 66 || b.getTypeId() == 68 || b.getTypeId() == 69 || b.getTypeId() == 71 || b.getTypeId() == 75 || b.getTypeId() == 76 || b.getTypeId() == 77 || b.getTypeId() == 78 || b.getTypeId() == 83 || b.getTypeId() == 90;
-
+		return b.getTypeId() == 6 || b.getTypeId() == 35 || b.getTypeId() == 37 || b.getTypeId() == 38 || b.getTypeId() == 39 || b.getTypeId() == 40 || b.getTypeId() == 44 || b.getTypeId() == 50 || b.getTypeId() == 51 || b.getTypeId() == 53 || b.getTypeId() == 55 || b.getTypeId() == 59 || b.getTypeId() == 61 || b.getTypeId() == 62 || b.getTypeId() == 63 || b.getTypeId() == 64 || b.getTypeId() == 65 || b.getTypeId() == 66 || b.getTypeId() == 67 || b.getTypeId() == 68 || b.getTypeId() == 69 || b.getTypeId() == 71 || b.getTypeId() == 75 || b.getTypeId() == 76 || b.getTypeId() == 77 || b.getTypeId() == 78 || b.getTypeId() == 83 || b.getTypeId() == 90;
+ 
 	}
 
 	public void getAll(Block b, BlockStructure struct){
@@ -400,7 +421,7 @@ public class ShiftPlugin extends JavaPlugin {
 		if(struct.isFinished())
 			return;
 
-		if(struct.getNumBlocksInStructure() >= maxMoveBlocks || (b.getFace(struct.getDirection()).getTypeId() != 0 && b.getFace(struct.getDirection()).getTypeId() != b.getTypeId() && !canAttach(b.getFace(struct.getDirection()).getTypeId()))){
+		if(struct.getNumBlocksInStructure() >= maxMoveBlocks || (b.getFace(struct.getDirection()).getTypeId() != 0 && b.getFace(struct.getDirection()).getTypeId() != b.getTypeId() && !canAttach(b.getFace(struct.getDirection()).getTypeId())) && !allowedMoveThroughItems.contains(b.getFace(struct.getDirection()).getTypeId())){
 
 			struct.setFinished();
 			return;
@@ -437,7 +458,7 @@ public class ShiftPlugin extends JavaPlugin {
 
 			Block block = b.getFace(checkDirs[i]);
 
-			if((b.getTypeId() == block.getTypeId() || allowedAttachedItems.contains(block.getTypeId())) && !struct.hasBlock(block)){
+			if((b.getTypeId() == block.getTypeId() || (moveAttached && allowedAttachedItems.contains(block.getTypeId()))) && !struct.hasBlock(block)){
 
 				getAll(block, struct);
 
@@ -518,7 +539,7 @@ class PListener extends PlayerListener{
 
 		if(event.getAction().equals(Action.RIGHT_CLICK_BLOCK) || event.getAction().equals(Action.LEFT_CLICK_BLOCK)){
 
-			
+	
 			if(event.getItem() != null && event.getItem().getTypeId() == ShiftPlugin.getMoveToolId() && plugin.hasCooledDown(event.getPlayer().getName()) && plugin.isMoving(event.getPlayer())){
 
 				int type = event.getClickedBlock().getTypeId();
@@ -547,7 +568,7 @@ class PListener extends PlayerListener{
 
 			} else if(event.getItem() != null && event.getItem().getTypeId() == ShiftPlugin.getDestroyToolId()){
 
-				if(event.getAction().equals(Action.LEFT_CLICK_BLOCK) && plugin.isDestroying(event.getPlayer())){
+				if(event.getAction().equals(Action.LEFT_CLICK_BLOCK) && plugin.isDestroying(event.getPlayer()) && plugin.getAllowedDestroyableItems().contains(event.getClickedBlock().getTypeId())){
 
 					ArrayList<Block> blocksToClear = new ArrayList<Block>();
 
@@ -558,7 +579,6 @@ class PListener extends PlayerListener{
 					for(Block b : blocksToClear){
 
 						b.setTypeId(0);
-
 					}
 
 				}

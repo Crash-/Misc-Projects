@@ -3,12 +3,14 @@ package us.Crash.Slots;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.Scanner;
-
-import com.nijiko.coelho.iConomy.iConomy;
-import com.nijiko.coelho.iConomy.system.Account;
+import com.earth2me.essentials.User;
+import com.iConomy.iConomy;
+import com.iConomy.system.Account;
 import com.nijikokun.bukkit.Permissions.*;
 import org.bukkit.ChatColor;
+import org.bukkit.Server;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.Sign;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -29,21 +31,149 @@ public class Slots extends JavaPlugin {
 	private static ArrayList<SlotCombo> comboList = new ArrayList<SlotCombo>();
 	private static ArrayList<SlotData> rollInfo = new ArrayList<SlotData>();
 	private static ArrayList<String> noDebugList = new ArrayList<String>();
-	public boolean isOPOnly = true, requireOwnership = false;
-	public int tickDelay = 50;
+	public static boolean useiConomy = true;
+	public static Server server;
+	public boolean isOPOnly = true, requireOwnership = false, comboOrderMatters = true, multiplyComboPayout = false, connectToAccounts = true, backupData = false, saveOnShutdown = true, useComboNames = true, multiplyRows = true;
+	public int tickDelay = 50, activateType = 0;
 	public static Permissions Permissions = null;
 	private File configFile, saveFile, rollsFile, combosFile;
 
 	public static ArrayList<SlotMachine> getSlotList(){ return slotsList; }
-	
+
 	public static SlotSelectors getSlotSelectors(){ return Selectors; }
-	
+
 	public static ArrayList<SlotCombo> getSlotCombos(){ return comboList; }
-	
+
 	public static ArrayList<SlotData> getSlotData(){ return rollInfo; }
-	
-	public static ArrayList<String> getNoDebugList(){ return noDebugList; }
-	
+
+	public static ArrayList<String> getNoDebugList(){ return noDebugList; } 
+
+	public static String formatMoney(double amount){
+
+		if(useiConomy){
+
+			return iConomy.format(amount);
+
+		} else {
+
+			return "$" + amount;
+
+		}
+
+	}
+
+	public static boolean accountExists(String player){
+
+		if(useiConomy){
+
+			Account account = iConomy.getAccount(player);
+			if(account == null)
+				return false;
+
+		} else {
+
+			if(player == null || player.isEmpty())
+				return false;
+
+			Player p = server.matchPlayer(player).get(0);
+			User account = User.get(p);
+			if(account == null)
+				return false;
+
+		}
+
+		return true;
+
+	}
+
+	public static double getAmount(String player){
+
+		if(useiConomy){
+
+			Account account = iConomy.getAccount(player);
+			if(account == null)
+				return 0;
+
+			return account.getHoldings().balance();
+
+		} else {
+
+			Player p = server.matchPlayer(player).get(0);
+			User account = User.get(p);
+
+			return account.getMoney();
+
+		}
+
+	}
+
+	public static boolean canAfford(String player, double amount){
+
+		if(useiConomy){
+
+			Account account = iConomy.getAccount(player);
+			if(account == null)
+				return false;
+
+			return account.getHoldings().hasEnough(amount);
+
+		} else {
+
+			Player p = server.matchPlayer(player).get(0);
+			User account = User.get(p);
+
+			return account.canAfford(amount);
+
+		}
+
+	}
+
+	public static String takeMoneyFrom(String player, double amount){
+
+		if(useiConomy){
+
+			Account account = iConomy.getAccount(player);
+			if(account == null)
+				return "Could not find an iConomy account for you.";
+
+			account.getHoldings().subtract(amount);
+
+		} else {
+
+			Player p = server.matchPlayer(player).get(0);
+			User account = User.get(p);
+
+			account.takeMoney(amount);
+
+		}
+
+		return "";
+
+	}
+
+	public static String giveMoneyTo(String player, double amount){
+
+		if(useiConomy){
+
+			Account account = iConomy.getAccount(player);
+			if(account == null)
+				return "Could not find an iConomy account for you.";
+
+			account.getHoldings().add(amount);
+
+		} else {
+
+			Player p = server.matchPlayer(player).get(0);
+			User account = User.get(p);
+
+			account.giveMoney(amount);
+
+		}
+
+		return "";
+
+	}
+
 	public static boolean hasPermission(Player p, String command){
 
 		command = command.toLowerCase();
@@ -57,6 +187,14 @@ public class Slots extends JavaPlugin {
 				return Permissions.getHandler().permission(p, "slots.create");
 			if(command.equals("remove"))
 				return Permissions.getHandler().permission(p, "slots.remove");
+			if(command.equals("buy"))
+				return Permissions.getHandler().permission(p, "slots.buy");
+			if(command.equals("deposit"))
+				return Permissions.getHandler().permission(p, "slots.deposit");
+			if(command.equals("withdraw"))
+				return Permissions.getHandler().permission(p, "slots.withdraw");
+			if(command.equals("backup"))
+				return Permissions.getHandler().permission(p, "slots.backup");
 			if(command.equals("save"))
 				return Permissions.getHandler().permission(p, "slots.save");
 			if(command.equals("reload"))
@@ -82,6 +220,8 @@ public class Slots extends JavaPlugin {
 	@Override
 	public void onDisable() {
 
+		if(saveOnShutdown)
+			saveData();
 		System.out.println("[Slots] Slots v" + getDescription().getVersion() + " disabled.");
 
 	}
@@ -99,6 +239,18 @@ public class Slots extends JavaPlugin {
 		if(new File("plugins/Slots/").mkdir())
 			System.out.println("[Slots]Created Slots directory.");
 
+		if(!new File("plugins/Slots/backup-slots.txt").exists()){
+
+			try { new File("plugins/Slots/backup-slots.txt").createNewFile(); } catch (IOException e) {
+
+				System.out.println("[Slots]Error creating backup slots file.");
+				getServer().getPluginManager().disablePlugin(this);
+				return;
+
+			}
+
+		}
+
 		if(!configFile.exists()){
 
 			try { configFile.createNewFile(); } catch (IOException e) {
@@ -113,7 +265,10 @@ public class Slots extends JavaPlugin {
 
 				out = new BufferedWriter(new FileWriter(configFile));
 
-				out.write("tick-delay: 50\r\nop-only: true\r\nrequire-ownership: false\r\n");
+				out.write("tick-delay: 50\r\nop-only: true\r\nrequire-ownership: false\r\ncombo-order-matters: true\r\nmultiply-combo-payout: false" +
+						"\r\nconnect-to-accounts: true\r\nbackup-slots: false" +
+						"\r\nroll-type: any #any is redstone or right clicking, put redstone for redstone only or click for right clicking only" +
+				"\r\nuse-combo-names: true\r\nmultiply-3-in-a-rows: true");
 
 				System.out.println("[Slots] Created/wrote default config.");
 
@@ -198,10 +353,10 @@ public class Slots extends JavaPlugin {
 
 		Permissions = (Permissions)getServer().getPluginManager().getPlugin("Permissions");
 		if(Permissions == null){
-				if(isOPOnly)
-					System.out.println("[Slots] Cannot find Permissions, switching to OP-only.");
-				else
-					System.out.println("[Slots] Warning : Cannot find a permissions plugin, there are no restrictions on commands now!");
+			if(isOPOnly)
+				System.out.println("[Slots] Cannot find Permissions, switching to OP-only.");
+			else
+				System.out.println("[Slots] Warning : Cannot find a permissions plugin, there are no restrictions on commands now!");
 		}
 
 		if(Permissions != null){
@@ -209,16 +364,36 @@ public class Slots extends JavaPlugin {
 			System.out.println("[Slots] Using Permissions plugin for permissions.");
 
 		}
-		
-		if(getServer().getPluginManager().getPlugin("iConomy") == null){
 
-			System.out.println("[Slots] Error : Unable to find iConomy plugin.");
-			getServer().getPluginManager().disablePlugin(this);
-			return;
+		if(getServer().getPluginManager().getPlugin("iConomy") != null)
+			useiConomy = true;
+		else
+			if(getServer().getPluginManager().getPlugin("Essentials") == null){
+
+				System.out.println("[Slots] Error : Unable to find iConomy or Essentials plugin.");
+				getServer().getPluginManager().disablePlugin(this);
+				return;
+
+			} else {
+
+				useiConomy = false;
+
+			}
+
+		System.out.println("[Slots] Using " + (useiConomy ? "iConomy" : "Essentials") + " plugin for economy.");
+
+		loadData(true);
+		if(backupData){
+
+			if(backupData(saveFile,new File("plugins/Slots/backup-slots.txt")))
+				System.out.println("[Slots] Saved data into backup file.");
+			else
+				System.out.println("[Slots] There was an error when saving the backup file.");
+
 
 		}
 
-		loadData();
+		server = getServer();
 
 		getServer().getPluginManager().registerEvent(Event.Type.PLAYER_INTERACT, playerListener, Event.Priority.Normal, this);
 		getServer().getPluginManager().registerEvent(Event.Type.BLOCK_BREAK, blockListener, Event.Priority.High, this);
@@ -259,22 +434,30 @@ public class Slots extends JavaPlugin {
 
 					if(args.length == 2){
 
+						if(!Permissions.getHandler().permission(p, "slots.create.hook")){
+
+							p.sendMessage(ChatColor.RED + "You can't use this command!");
+							return false;
+
+						}
+
+
 						name = args[1];
 
-						if(name == null || !iConomy.getBank().hasAccount(name)){
+						if(name == null || !Slots.accountExists(name)){
 
-							p.sendMessage(ChatColor.RED + name + " has no iConomy account!");
+							p.sendMessage(ChatColor.RED + name + " has no bank account!");
 							return false;
 
 						}
 
 					}
 					Selectors.addNewCreator(p, name);
-				
+
 				} else {
-					
+
 					Selectors.addNewCreator(p, p.getName());
-					
+
 				}
 				p.sendMessage(ChatColor.GOLD + "Left click a sign to create the machine!");
 				return true;
@@ -298,7 +481,7 @@ public class Slots extends JavaPlugin {
 
 			} else if(args[0].equals("load")){
 
-				if(loadData())
+				if(loadData(true))
 					p.sendMessage(ChatColor.GREEN + "Reloaded files successfully.");
 				else
 					p.sendMessage(ChatColor.RED + "There was an error when reloading.");
@@ -337,9 +520,9 @@ public class Slots extends JavaPlugin {
 
 					}
 
-					if(ind < 0 || ind > rollInfo.size()){
+					if(ind < 0 || ind >= rollInfo.size()){
 
-						p.sendMessage(ChatColor.RED + "The index must be 0 through " + rollInfo.size() + ".");
+						p.sendMessage(ChatColor.RED + "The index must be 0 through " + (rollInfo.size() - 1) + ".");
 						return false;
 
 					}
@@ -389,24 +572,109 @@ public class Slots extends JavaPlugin {
 						return false;
 
 					}
-					
+
 					tickDelay = newtick;
 					p.sendMessage(ChatColor.GREEN + "You set the new tick delay.");
 					return true;
 
 				} else if(args[1].equals("ownership")){
-					
+
 					requireOwnership = !requireOwnership;
 					p.sendMessage(ChatColor.GREEN + "Toggled require-ownership.");
 					return true;
-					
+
+				} else if(args[1].equals("order")){
+
+					comboOrderMatters = !comboOrderMatters;
+					p.sendMessage(ChatColor.GREEN + "Toggled combo-order-matters.");
+					return true;
+
+				} else if(args[1].equals("multiply")){
+
+					multiplyComboPayout = !multiplyComboPayout;
+					p.sendMessage(ChatColor.GREEN + "Toggled multiply-combo-payouts.");
+					return true;
+
 				}
 
 			} else if(args[0].equalsIgnoreCase("info")){
-				
+
 				Selectors.addNewSelector(p, 2);
 				p.sendMessage(ChatColor.GREEN + "Left click on a slot machine to get info.");
-				
+
+			} else if(args[0].equalsIgnoreCase("backup")){
+
+				if(backupData(saveFile, new File("plugins/slots/backup-slots.txt")))
+					p.sendMessage(ChatColor.GREEN + "The save data has been backed up.");
+				else
+					p.sendMessage(ChatColor.RED + "There was an issue when backing up the data.");
+
+			} else if(!connectToAccounts){
+
+				if(args[0].equalsIgnoreCase("buy")){
+
+					Selectors.addNewSelector(p, 3);
+					p.sendMessage(ChatColor.GREEN + "Left click on a slot machine to buy it.");
+
+				} else if(args[0].equalsIgnoreCase("deposit")){
+
+					Integer amount = null;
+
+					try {
+
+						amount = Integer.parseInt(args[1]);
+
+					} catch(Exception e){
+
+						p.sendMessage(ChatColor.RED + "Error getting amount to deposit.");
+						return false;
+
+					}
+
+					if(amount == 0){
+
+						p.sendMessage(ChatColor.RED + "Put in something higher than 0!");
+						return false;
+
+					}
+
+					if(!canAfford(p.getName(), amount)){
+
+						p.sendMessage(ChatColor.RED + "You don't have enough money!");
+						return false;
+
+					}
+
+					Selectors.addNewMoneyPlayer(p, amount);
+					p.sendMessage(ChatColor.GREEN + "Left click on a slot machine to put money into it");
+
+				} else if(args[0].equalsIgnoreCase("withdraw")){
+
+					Integer amount = null;
+
+					try {
+
+						amount = Integer.parseInt(args[1]);
+
+					} catch(Exception e){
+
+						p.sendMessage(ChatColor.RED + "Error getting amount to withdraw.");
+						return false;
+
+					}
+
+					if(amount == 0){
+
+						p.sendMessage(ChatColor.RED + "Put in something higher than 0!");
+						return false;
+
+					}
+
+					Selectors.addNewMoneyPlayer(p, -amount);
+					p.sendMessage(ChatColor.GREEN + "Left click on a slot machine to take money from it");
+
+				}
+
 			}
 
 		}
@@ -415,20 +683,70 @@ public class Slots extends JavaPlugin {
 
 	}
 
-	public boolean loadData(){
+	public boolean backupData(File saveFile, File backupFile){
+
+		ArrayList<String> lines = new ArrayList<String>();
+
+		try {
+
+			Scanner s = new Scanner(saveFile);
+
+			while(s.hasNextLine())
+				lines.add(s.nextLine());
+
+			BufferedWriter out = new BufferedWriter(new FileWriter(backupFile));
+			StringBuilder savedData = new StringBuilder();
+
+			for(String str : lines)
+				savedData.append(str).append("\r\n");
+
+			out.write(savedData.toString());
+
+			out.close();
+
+		} catch(Exception e){
+
+			System.out.println("[Slots] Error when backuping up the data.");
+			return false;
+
+		}
+
+		return true;
+
+	}
+
+	public boolean loadData(boolean outputErrors){
 
 		ArrayList<SlotMachine> tempSlots = new ArrayList<SlotMachine>();
 		ArrayList<SlotCombo> tempCombos = new ArrayList<SlotCombo>();
 		ArrayList<SlotData> tempRolls = new ArrayList<SlotData>();
-		noDebugList.clear();
-		Selectors = new SlotSelectors();
-		
+		if(outputErrors){
+
+			noDebugList.clear();
+			Selectors = new SlotSelectors();
+
+		}
+
 		Configuration config = new Configuration(configFile);
 		config.load();
 
 		isOPOnly = config.getBoolean("op-only", true);
 		requireOwnership = config.getBoolean("require-ownership", false);
 		tickDelay = config.getInt("tick-delay", 50);
+		comboOrderMatters = config.getBoolean("combo-order-matters", true);
+		multiplyComboPayout = config.getBoolean("multiply-combo-payout", false);
+		connectToAccounts = config.getBoolean("connect-to-accounts", true);
+		backupData = config.getBoolean("backup-slots", false);
+		saveOnShutdown = config.getBoolean("save-on-shutdown", true);
+		String roll = config.getString("roll-type", "any").toLowerCase();
+		if(roll.equals("redstone"))
+			activateType = 1;
+		else if(roll.equals("click"))
+			activateType = 2;
+		else
+			activateType = 0;
+		useComboNames = config.getBoolean("use-combo-names", true);
+		multiplyRows = config.getBoolean("multiply-3-in-a-rows", true);
 
 		Scanner s = null;
 
@@ -454,9 +772,9 @@ public class Slots extends JavaPlugin {
 					String[] data = line.split("\"=")[1].split(",");
 
 					int w = Integer.parseInt(data[0]), x = Integer.parseInt(data[1]), y = Integer.parseInt(data[2]), z = Integer.parseInt(data[3]), uses;
-					double cost = Double.parseDouble(data[4]);
+					double cost = Double.parseDouble(data[4]), amtInside;
 					String name;
-					Account acc = null;
+					SlotAccount acc = null;
 					try {
 						name = data[6];
 					} catch(ArrayIndexOutOfBoundsException e){
@@ -467,18 +785,25 @@ public class Slots extends JavaPlugin {
 					} catch(ArrayIndexOutOfBoundsException e){
 						uses = 0;
 					}
+					try {
+						amtInside = Double.parseDouble(data[7]);
+					} catch(ArrayIndexOutOfBoundsException e){
+						amtInside = 0;
+					}
 
 					if(name != null && !name.isEmpty())
-						if(iConomy.getBank().hasAccount(name))
-							acc = iConomy.getBank().getAccount(name);
+						if(Slots.accountExists(name))
+							acc = new SlotAccount(name);
 						else
-							System.out.println("[Slots]iConomy has no account for " + name + ".");
+							if(outputErrors)
+								System.out.println("[Slots]There is no bank account for " + name + ".");
 
 					Block b = getServer().getWorlds().get(w).getBlockAt(x, y, z);
 
 					if(b.getTypeId() != 63 && b.getTypeId() != 68){
 
-						System.out.println("[Slots]Line " + (i + 1) + " was found to not be a sign.");
+						if(outputErrors)
+							System.out.println("[Slots]Line " + (i + 1) + " was found to not be a sign.");
 						i++;
 						continue;
 
@@ -491,15 +816,17 @@ public class Slots extends JavaPlugin {
 					((Sign)b.getState()).update();
 
 					if(acc == null)
-						tempSlots.add(new SlotMachine(this, b, cost, uses));
+						tempSlots.add(new SlotMachine(this, b, cost, uses, amtInside));
 					else
-						tempSlots.add(new SlotMachine(this, b, cost, acc, uses));
+						tempSlots.add(new SlotMachine(this, b, cost, acc, uses, amtInside));
 
 					i++;
 
 				} catch(Exception e){
 
-					System.out.println("[Slots]Error loading slot on line " + (i + 1) + ".");
+					i++;
+					if(outputErrors)
+						System.out.println("[Slots]Error loading slot on line " + (i + 1) + ".");
 
 				}
 
@@ -518,13 +845,21 @@ public class Slots extends JavaPlugin {
 
 			s = new Scanner(rollsFile);
 
-			String name = "", symb, line;
-			int pay, chance1, chance2;
-			boolean hadError = false;
+			String name = "", symb, col, line = "";
+			int pay, chance1 = 0, chance2 = 0;
+			Integer chance = null;
+			boolean hadError = false, announce, isUpdated = true;
 
 			while(s.hasNextLine()){
 
-				line = s.nextLine();
+				if(isUpdated)
+					line = s.nextLine();
+				else {
+
+					isUpdated = true;
+					continue;
+
+				}
 
 				if(line == null || line.isEmpty())
 					continue;
@@ -546,14 +881,41 @@ public class Slots extends JavaPlugin {
 					line = s.nextLine();
 					pay = Integer.parseInt(line.split("=")[1]);
 					line = s.nextLine().split("=")[1];
-					chance1 = Integer.parseInt(line.split("/")[0]);
-					chance2 = Integer.parseInt(line.split("/")[1]);
-					line = s.nextLine().split("=")[1];
-					tempRolls.add(new SlotData(name, symb, ChatColor.getByCode(Integer.parseInt(line)), pay, chance1, chance2));
+
+					try {
+
+						chance = Integer.parseInt(line);
+
+					} catch(NumberFormatException e){
+
+						chance1 = Integer.parseInt(line.split("/")[0]);
+						chance2 = Integer.parseInt(line.split("/")[1]);
+
+					}
+
+					if(chance == null)
+						chance = (int)(100 * (chance1 / (double)chance2));
+
+					col = s.nextLine().split("=")[1];
+
+					line = s.nextLine().toLowerCase();
+
+					if(line.split("=")[0].equals("announce-win"))
+						announce = Boolean.parseBoolean(line.split("=")[1]);
+					else {
+
+						announce = false;
+						isUpdated = false;
+
+					}
+					tempRolls.add(new SlotData(name, symb, ChatColor.getByCode(Integer.parseInt(col)), pay, chance, announce));
+
+					chance = null;
 
 				} catch(Exception e){
 
-					System.out.println("[Slots] Error with roll " + name + ".");
+					if(outputErrors)
+						System.out.println("[Slots] Error with roll " + name + ".");
 
 				}
 
@@ -562,6 +924,7 @@ public class Slots extends JavaPlugin {
 		} catch(Exception e){
 
 			System.out.println("[Slots] Error when opening rolls file.");
+			return false;
 
 		}
 
@@ -586,13 +949,32 @@ public class Slots extends JavaPlugin {
 					}
 
 					String[] names = line.split("=")[0].split(":");
-					double pay = Double.parseDouble(line.split("=")[1]);
+					double pay = Double.parseDouble(line.split("=")[1].split(",")[0]);
+					boolean announce;
+					String name = "";
 
-					tempCombos.add(new SlotCombo(names, pay));
+					if(useComboNames){
+
+						try {
+							name = line.split("=")[1].split(",")[1];
+						} catch(ArrayIndexOutOfBoundsException e){
+							System.out.println("[Slots] NOTE : Combos have names added after the pay in combos.txt! If you wish to name the combos, edit the file and reload.");
+							useComboNames = false;
+						}
+
+					}
+					try {
+						announce = Boolean.parseBoolean(line.split("=")[1].split(",")[2]);
+					} catch(ArrayIndexOutOfBoundsException e){
+						announce = false;
+					}
+
+					tempCombos.add(new SlotCombo(name, names, pay, announce));
 
 				} catch(Exception e){
 
-					System.out.println("[Slots] Error in combo file on line " + lineNum + ".");
+					if(outputErrors)
+						System.out.println("[Slots] Error in combo file on line " + lineNum + ".");
 
 				}
 
@@ -601,13 +983,14 @@ public class Slots extends JavaPlugin {
 		} catch(Exception e){
 
 			System.out.println("[Slots] Error when opening combos file.");
+			return false;
 
 		}
 
 		slotsList = tempSlots;
 		comboList = tempCombos;
 		rollInfo = tempRolls;
-		
+
 		return true;
 
 	}
@@ -615,11 +998,12 @@ public class Slots extends JavaPlugin {
 	public void saveData(){
 
 		BufferedWriter out = null;
+
 		try {
 
 			out = new BufferedWriter(new FileWriter(configFile));
 
-			out.write("tick-delay: " + tickDelay + "\r\nop-only: " + isOPOnly + "\r\nrequire-ownership: " + requireOwnership + "\r\n");
+			out.write("tick-delay: " + tickDelay + "\r\nop-only: " + isOPOnly + "\r\nrequire-ownership: " + requireOwnership + "\r\nmultiply-combo-payout: " + multiplyComboPayout + "\r\ncombo-order-matters: " + comboOrderMatters + "\r\nconnect-to-accounts: " + connectToAccounts + "\r\nbackup-slots: " + backupData + "\r\nsave-on-shutdown: " + saveOnShutdown + "\r\nroll-type: " + (activateType == 0 ? "any" : (activateType == 1 ? "redstone" : "click")) + "\r\nuse-combo-names: " + useComboNames + "\r\nmultiply-3-in-a-rows: " + multiplyRows);
 
 		}catch(Exception e){
 
@@ -642,7 +1026,8 @@ public class Slots extends JavaPlugin {
 				builder.append("\"").append(m.getSign().getLine(3)).append("\"=").append(getServer().getWorlds().indexOf(m.getBlock().getWorld())).
 				append(",").append(m.getBlock().getLocation().getBlockX()).append(",").append(m.getBlock().getLocation().getBlockY()).
 				append(",").append(m.getBlock().getLocation().getBlockZ()).append(",").append(m.getCost()).append(",").append(m.getUses()).append(",").
-				append(m.getAccount() == null ? "" : m.getAccount().getName()).append("\r\n");
+				append(m.getAccount() == null ? "" : m.getAccount().getName()).append(",").append(m.getAmountInside()).append("\r\n");
+
 				out.write(builder.toString());
 
 			}
@@ -668,8 +1053,9 @@ public class Slots extends JavaPlugin {
 				b.append("name=").append(d.getName()).append("\r\n").
 				append("symbol=").append(d.getSymbol()).append("\r\n").
 				append("pay=").append(d.getPay()).append("\r\n").
-				append("chance=").append(d.getNumerator()).append("/").append(d.getDenominator()).append("\r\n").
-				append("color=").append(d.getChatColor().getCode()).append("\r\n\r\n");
+				append("chance=").append((int)(d.getChance() * 100)).append("\r\n").
+				append("color=").append(d.getChatColor().getCode()).append("\r\n").
+				append("announce-win=").append(d.announceWin()).append("\r\n\r\n");
 				out.write(b.toString());
 
 			}
@@ -692,7 +1078,7 @@ public class Slots extends JavaPlugin {
 			for(SlotCombo c : comboList){
 
 				StringBuilder b = new StringBuilder();
-				b.append(c.getNames()[0]).append(":").append(c.getNames()[1]).append(":").append(c.getNames()[2]).append("=").append(c.getPay());
+				b.append(c.getNames()[0]).append(":").append(c.getNames()[1]).append(":").append(c.getNames()[2]).append("=").append(c.getPay()).append(",").append(c.getName()).append(",").append(c.announceWin()).append("\r\n");
 				out.write(b.toString());
 
 			}
@@ -727,7 +1113,7 @@ public class Slots extends JavaPlugin {
 }
 
 class PListener extends PlayerListener {
-	
+
 	Slots plugin;
 
 	public PListener(Slots p){
@@ -735,38 +1121,119 @@ class PListener extends PlayerListener {
 		plugin = p;
 
 	}
-	
+
 	@Override
 	public void onPlayerInteract(PlayerInteractEvent event){
-		
+
 		if(event.getAction().equals(Action.RIGHT_CLICK_BLOCK)){
-			
+
 			Block b = event.getClickedBlock();
 
-			SlotMachine m = Slots.getMachine(b);
-			if(m == null)
-				return;
+			if((b.getTypeId() == 63 || b.getTypeId() == 68) && (plugin.activateType == 0 || plugin.activateType == 2)){
 
-			if(!m.isRolling())
-				m.rollSlots(event.getPlayer());
-			else
-				event.getPlayer().sendMessage(ChatColor.RED + "This slot machine is already rolling.");
-			
+				SlotMachine m = Slots.getMachine(b);
+				if(m == null)
+					return;
+
+				if(!m.isRolling())
+					m.rollSlots(event.getPlayer());
+				else
+					event.getPlayer().sendMessage(ChatColor.RED + "This slot machine is already rolling.");
+
+			} else if((b.getTypeId() == 69 || b.getTypeId() == 77) && (plugin.activateType ==  0 || plugin.activateType == 1)){
+
+				BlockFace faces[] = { BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST };
+				SlotMachine m;
+				Block fromBlock = null;
+				if(b.getTypeId() == 69){
+
+					switch(b.getData()){
+
+					case 0x1:
+						fromBlock = b.getFace(BlockFace.NORTH);
+						break;
+					case 0x2:
+						fromBlock = b.getFace(BlockFace.SOUTH);
+						break;
+					case 0x3:
+						fromBlock = b.getFace(BlockFace.EAST);
+						break;
+					case 0x4:
+						fromBlock = b.getFace(BlockFace.WEST);
+						break;
+
+					default:
+						fromBlock = b;
+
+					}
+
+				}
+
+				Block block;
+
+				for(BlockFace f : faces){
+
+					block = b.getFace(f);
+					if(block.getTypeId() == 68 || block.getTypeId() == 63){
+
+						m = Slots.getMachine(block);
+						if(m != null){
+
+							if(!m.isRolling())
+								m.rollSlots(event.getPlayer());
+							else
+								event.getPlayer().sendMessage(ChatColor.RED + "This slot machine is already rolling.");
+
+						}
+
+						return;
+
+					}
+
+				}
+
+				if(b.getTypeId() != 69)
+					return;
+
+				for(BlockFace f : faces){
+
+					block = fromBlock.getFace(f);
+					if(block.getTypeId() == 68 || block.getTypeId() == 63){
+
+						m = Slots.getMachine(block);
+						if(m != null){
+
+							if(!m.isRolling())
+								m.rollSlots(event.getPlayer());
+							else
+								event.getPlayer().sendMessage(ChatColor.RED + "This slot machine is already rolling.");
+
+						}
+
+						return;
+
+					}
+
+				}
+
+			}
+
 		} else if(event.getAction().equals(Action.LEFT_CLICK_BLOCK)){
-			
+
 			Block b = event.getClickedBlock();
-			
+
 			if(b.getTypeId() == 63 || b.getTypeId() == 68){
 
 				int type = Slots.getSlotSelectors().getType(event.getPlayer().getName());
 				String account = Slots.getSlotSelectors().getAccount(event.getPlayer().getName());
 				Slots.getSlotSelectors().remove(event.getPlayer().getName());
+
 				if(type == 0){
 
 					Sign sign = (Sign)b.getState();
-					Account acc = null;
-					if(account != null && iConomy.getBank().hasAccount(account))
-						acc = iConomy.getBank().getAccount(account);
+					SlotAccount acc = null;
+					if(account != null && Slots.accountExists(account))
+						acc = new SlotAccount(account);
 
 					if(ChatColor.stripColor(sign.getLine(0)).equalsIgnoreCase("[Slots]")){
 
@@ -788,28 +1255,41 @@ class PListener extends PlayerListener {
 							return;
 
 						}
-						if(!plugin.loadData()){
-							
-							event.getPlayer().sendMessage(ChatColor.RED + "Error while attempting to load data.");
-							return;
-							
+
+						System.out.println(account);
+
+						if(account.equalsIgnoreCase(event.getPlayer().getName())){
+
+							if(!acc.hasEnough(cost)){
+
+								event.getPlayer().sendMessage("Sorry, you don't have enough money.");
+								return;
+
+							} else {
+
+								acc.subtractMoney(cost);
+
+							}
+
 						}
-							
+
 						if(acc == null){
 
-							Slots.getSlotList().add(new SlotMachine(plugin, b, cost, 0));
+							Slots.getSlotList().add(new SlotMachine(plugin, b, cost, 0, 0));
 							event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created.");
 
 						} else {
 
-							Slots.getSlotList().add(new SlotMachine(plugin, b, cost, acc, 0));
-							event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created and linked with " + account + "'s iConomy account.");
+							Slots.getSlotList().add(new SlotMachine(plugin, b, cost, new SlotAccount(event.getPlayer().getName()), 0, 0));
+							if(plugin.connectToAccounts)
+								event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created and linked with " + account + "'s bank account.");
+							else
+								event.getPlayer().sendMessage(ChatColor.GREEN + "Slot machine created with " + account + " as the owner.");
 
 						}
-						sign.setLine(0, ChatColor.YELLOW + sign.getLine(0));
+						sign.setLine(0, ChatColor.YELLOW + "[Slots]");
 						sign.update();
-						plugin.saveData();
-						
+
 					}
 
 				}
@@ -819,35 +1299,218 @@ class PListener extends PlayerListener {
 					if(m == null)
 						return;
 
+					if(m.getAccount() == null){
+
+						if(!Slots.Permissions.getHandler().permission(event.getPlayer(), "slots.remove.removeall")){
+
+							event.getPlayer().sendMessage(ChatColor.RED + "You cannot destroy slots owned by nobody!");
+							return;
+
+						}
+
+					} else {
+
+						if(!m.getAccount().getName().equalsIgnoreCase(event.getPlayer().getName()) && !Slots.Permissions.getHandler().permission(event.getPlayer(), "slots.remove.removeall")){
+
+							event.getPlayer().sendMessage(ChatColor.RED + "You cannot destroy others' slots!");
+							return;
+
+						}
+
+					}
+
+					SlotAccount acc = new SlotAccount(event.getPlayer().getName());
+					double addAmount = m.getAmountInside();
+
 					Slots.getSlotList().remove(m);
 
 					m.stopRoller();
 					m.getSign().setLine(0, "[Slots]");
+					m.getSign().update();
 
-					event.getPlayer().sendMessage(ChatColor.GREEN + "The slot machine was removed.");
+					if(!Slots.accountExists(acc.getName()))
+						event.getPlayer().sendMessage(ChatColor.RED + "Could not find a bank account for you, the money will not be transferred to your account.");
+					else {
+
+						acc.addMoney(addAmount);
+						event.getPlayer().sendMessage(ChatColor.GREEN + "The slot machine was removed, you got " + Slots.formatMoney(addAmount) + " from it.");
+
+					}
 
 				}
 				if(type == 2){
-					
+
 					SlotMachine m = Slots.getMachine(b);
 					if(m == null)
 						return;
-					
-					Account acc = m.getAccount();
+
+					SlotAccount acc = m.getAccount();
 					Player p = event.getPlayer();
 					p.sendMessage(ChatColor.GOLD + "Owner account : " + (acc == null ? "<none>" : acc.getName()));
-					p.sendMessage(ChatColor.GOLD + "Balance left : " + (acc == null ? "infinite" : "" + acc.getBalance()));
+					p.sendMessage(ChatColor.GOLD + "Balance left : " + (acc == null ? "infinite" : (plugin.connectToAccounts ? "" + acc.getAmount() : "" + m.getAmountInside())));
 					p.sendMessage(ChatColor.GOLD + "Cost : " + m.getCost());
 					p.sendMessage(ChatColor.GOLD + "Uses : " + m.getUses());
-					
+
+				}
+				if(type == 3){
+
+					SlotMachine m = Slots.getMachine(b);
+					if(m == null)
+						return;
+
+					String error = m.sellOwnership(event.getPlayer().getName());
+
+					if(error != null)
+						event.getPlayer().sendMessage(ChatColor.RED + error);
+					else
+						event.getPlayer().sendMessage(ChatColor.GREEN + "You bought the slot machine!");
+
+				}
+				if(type == 4){
+
+					SlotMachine m = Slots.getMachine(b);
+					if(m == null)
+						return;
+
+					if(m.getAccount() == null){
+
+						event.getPlayer().sendMessage(ChatColor.RED + "That slot machine is not owned by anybody! You can buy it using /slots buy");
+						return;
+
+					}
+					if(!m.getAccount().getName().equalsIgnoreCase(event.getPlayer().getName())){
+
+						event.getPlayer().sendMessage(ChatColor.RED + "That is not your slot machine!");
+						return;
+
+					}
+					String name = event.getPlayer().getName();
+					int depositAmount = Slots.getSlotSelectors().getAmount(name);
+
+					m.addMoneyInside(depositAmount);
+					Slots.takeMoneyFrom(name, depositAmount);
+
+					event.getPlayer().sendMessage(ChatColor.GREEN + "You depositied " + Slots.formatMoney(depositAmount) + " into the machine.");
+
+				}
+				if(type == 5){
+
+					SlotMachine m = Slots.getMachine(b);
+					if(m == null)
+						return;
+
+					if(m.getAccount() == null){
+
+						event.getPlayer().sendMessage(ChatColor.RED + "That slot machine is not owned by anybody! You can buy it using /slots buy");
+						return;
+
+					}
+					if(!m.getAccount().getName().equalsIgnoreCase(event.getPlayer().getName())){
+
+						event.getPlayer().sendMessage(ChatColor.RED + "That is not your slot machine!");
+						return;
+
+					}
+
+					String name = event.getPlayer().getName();
+					int withdrawAmount = -1 * Slots.getSlotSelectors().getAmount(name);
+
+					if(!m.hasEnoughMoney(withdrawAmount)){
+
+						event.getPlayer().sendMessage(ChatColor.RED + "That slot machine doesn't have enough money inside!");
+						return;
+
+					}
+
+					m.subtractMoneyInside(withdrawAmount);
+					Slots.giveMoneyTo(name, withdrawAmount);
+
+					event.getPlayer().sendMessage(ChatColor.GREEN + "You withdrew " + Slots.formatMoney(withdrawAmount) + " from the machine.");
+
+				}
+
+			} else if((b.getTypeId() == 69 || b.getTypeId() == 77) && (plugin.activateType ==  0 || plugin.activateType == 1)){
+
+				BlockFace faces[] = { BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST };
+				SlotMachine m;
+				Block fromBlock = null;
+				if(b.getTypeId() == 69){
+
+					switch(b.getData()){
+
+					case 0x1:
+						fromBlock = b.getFace(BlockFace.NORTH);
+						break;
+					case 0x2:
+						fromBlock = b.getFace(BlockFace.SOUTH);
+						break;
+					case 0x3:
+						fromBlock = b.getFace(BlockFace.EAST);
+						break;
+					case 0x4:
+						fromBlock = b.getFace(BlockFace.WEST);
+						break;
+
+					default:
+						fromBlock = b;
+
+					}
+
+				}
+
+				Block block;
+
+				for(BlockFace f : faces){
+
+					block = b.getFace(f);
+					if(block.getTypeId() == 68 || block.getTypeId() == 63){
+
+						m = Slots.getMachine(block);
+						if(m != null){
+
+							if(!m.isRolling())
+								m.rollSlots(event.getPlayer());
+							else
+								event.getPlayer().sendMessage(ChatColor.RED + "This slot machine is already rolling.");
+
+						}
+
+						return;
+
+					}
+
+				}
+
+				if(b.getTypeId() != 69)
+					return;
+
+				for(BlockFace f : faces){
+
+					block = fromBlock.getFace(f);
+					if(block.getTypeId() == 68 || block.getTypeId() == 63){
+
+						m = Slots.getMachine(block);
+						if(m != null){
+
+							if(!m.isRolling())
+								m.rollSlots(event.getPlayer());
+							else
+								event.getPlayer().sendMessage(ChatColor.RED + "This slot machine is already rolling.");
+
+						}
+
+						return;
+
+					}
+
 				}
 
 			}
-			
+
 		}
-		
+
 	}
-	
+
 }
 
 class BListener extends BlockListener {
@@ -862,7 +1525,7 @@ class BListener extends BlockListener {
 
 	@Override
 	public void onBlockBreak(BlockBreakEvent event){
-		
+
 		Block b = (org.bukkit.block.Block)event.getBlock();
 		SlotMachine m = Slots.getMachine(b);
 
@@ -874,6 +1537,5 @@ class BListener extends BlockListener {
 		event.getPlayer().sendMessage(ChatColor.RED + "You must use the remove command first to remove the slot machine!");
 
 	}
-
 
 }
