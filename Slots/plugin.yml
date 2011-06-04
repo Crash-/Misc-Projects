@@ -1,7 +1,0 @@
-name: Slots
-version: 0.8.2
-main: us.Crash.Slots.Slots
-commands:
-  slots:
-    description:
-    usage:
